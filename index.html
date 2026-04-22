@@ -2,7 +2,6 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ParaCep — Kişisel Finans</title>
 <meta name="description" content="Gelir, gider, borç ve bütçeni tek yerden takip et">
 <meta name="theme-color" content="#7C3AED">
@@ -12,7 +11,8 @@
 
 <!-- iOS PWA -->
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-title" content="ParaCep">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 
@@ -837,23 +837,40 @@ function PhoneShell({ children, T }) {
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
-  const [screen, setScreen] = React.useState(() => localStorage.getItem('pc_screen') || 'home');
+  const [screen, setScreen] = React.useState(() => {
+    const p = new URLSearchParams(window.location.search).get('screen');
+    return p || localStorage.getItem('pc_screen') || 'home';
+  });
   const [modal, setModal] = React.useState(false);
   const [theme, setTheme] = React.useState(() => localStorage.getItem('pc_theme') || 'light');
   const [accent, setAccent] = React.useState(() => localStorage.getItem('pc_accent') || 'purple');
   const [chartStyle, setChartStyle] = React.useState('bar');
+  const [isMobile, setIsMobile] = React.useState(() => window.matchMedia('(max-width: 600px)').matches);
 
-  // Expose setters for tweaks panel
   React.useEffect(() => {
-    window.__setTheme = (v) => {setTheme(v);localStorage.setItem('pc_theme', v);};
-    window.__setAccent = (v) => {setAccent(v);localStorage.setItem('pc_accent', v);};
+    const mq = window.matchMedia('(max-width: 600px)');
+    const h = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+
+  React.useEffect(() => {
+    window.__setTheme = (v) => { setTheme(v); localStorage.setItem('pc_theme', v); };
+    window.__setAccent = (v) => { setAccent(v); localStorage.setItem('pc_accent', v); };
     window.__setChart = (v) => setChartStyle(v);
   }, []);
 
   const T = makeTheme(theme, accent);
 
+  React.useEffect(() => {
+    const tag = document.querySelector('meta[name="theme-color"]');
+    if (tag) tag.setAttribute('content', T.primary);
+    if (isMobile) document.body.style.background = T.bg;
+    else document.body.style.background = '';
+  }, [isMobile, T.bg, T.primary]);
+
   const navigate = (id) => {
-    if (id === 'fab') {setModal(true);return;}
+    if (id === 'fab') { setModal(true); return; }
     setScreen(id);
     localStorage.setItem('pc_screen', id);
   };
@@ -862,36 +879,80 @@ function App() {
 
   const renderScreen = () => {
     switch (screen) {
-      case 'home':return <DashboardScreen T={T} onNav={navigate} />;
-      case 'debts':return <DebtsScreen T={T} />;
-      case 'txns':return <TransactionsScreen T={T} />;
-      case 'reports':return <ReportsScreen T={T} chartStyle={chartStyle} />;
-      case 'budgets':return <BudgetsScreen T={T} />;
-      case 'settings':return <SettingsScreen T={T} isDark={theme === 'dark'} onToggleDark={() => {const n = theme === 'dark' ? 'light' : 'dark';setTheme(n);localStorage.setItem('pc_theme', n);}} accent={accent} onAccent={(v) => {setAccent(v);localStorage.setItem('pc_accent', v);window.__setAccent&&window.__setAccent(v);}} />;
-      default:return <DashboardScreen T={T} onNav={navigate} />;
+      case 'home':     return <DashboardScreen T={T} onNav={navigate} />;
+      case 'debts':    return <DebtsScreen T={T} />;
+      case 'txns':     return <TransactionsScreen T={T} />;
+      case 'reports':  return <ReportsScreen T={T} chartStyle={chartStyle} />;
+      case 'budgets':  return <BudgetsScreen T={T} />;
+      case 'settings': return <SettingsScreen T={T} isDark={theme === 'dark'}
+        onToggleDark={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); localStorage.setItem('pc_theme', n); }}
+        accent={accent} onAccent={(v) => { setAccent(v); localStorage.setItem('pc_accent', v); window.__setAccent && window.__setAccent(v); }} />;
+      default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
   };
 
-  const navItems = [
-  { id: 'home', lbl: 'Ana Sayfa' }, { id: 'debts', lbl: 'Borçlar' },
-  { id: 'fab', lbl: 'Hızlı Ekle' }, { id: 'budgets', lbl: 'Bütçe' },
-  { id: 'txns', lbl: 'İşlemler' }, { id: 'reports', lbl: 'Raporlar' },
-  { id: 'settings', lbl: 'Ayarlar' }];
+  const renderHeader = () => screen === 'settings'
+    ? <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>Ayarlar</span>
+      </div>
+    : <AppHeader title={screenTitles[screen] || 'ParaCep'} T={T} onSettings={() => navigate('settings')} showNotif={screen === 'home'} />;
 
+  const TAB_ITEMS = [
+    { id: 'home',   lbl: 'Ana Sayfa', icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+    { id: 'debts',  lbl: 'Borçlar',   icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
+    { id: 'fab',    lbl: '',          icon: null },
+    { id: 'txns',   lbl: 'İşlemler',  icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg> },
+    { id: 'reports',lbl: 'Raporlar',  icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+  ];
+
+  const renderTabBar = (iconSize = 22, lblSize = 10, fabOffset = -18) =>
+    TAB_ITEMS.map((t) => t.id === 'fab'
+      ? <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <button onClick={() => navigate('fab')} style={{ width: 52, height: 52, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: fabOffset }}>
+            <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      : <button key={t.id} onClick={() => navigate(t.id)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0, minHeight: 44 }}>
+          {t.icon(screen === t.id ? T.primary : T.textMut)}
+          <span style={{ fontSize: lblSize, fontWeight: 600, color: screen === t.id ? T.primary : T.textMut }}>{t.lbl}</span>
+        </button>
+    );
+
+  // ── MOBİL LAYOUT (gerçek cihaz tam ekran) ─────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: T.bg, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", overflow: 'hidden' }}>
+        {renderHeader()}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+          {renderScreen()}
+          {modal && <QuickAddModal onClose={() => setModal(false)} T={T} />}
+        </div>
+        <div style={{ background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
+          {renderTabBar()}
+        </div>
+      </div>
+    );
+  }
+
+  // ── MASAÜSTÜ PROTOTIP LAYOUT ───────────────────────────────────────────────
+  const navItems = [
+    { id: 'home', lbl: 'Ana Sayfa' }, { id: 'debts', lbl: 'Borçlar' },
+    { id: 'fab', lbl: 'Hızlı Ekle' }, { id: 'budgets', lbl: 'Bütçe' },
+    { id: 'txns', lbl: 'İşlemler' }, { id: 'reports', lbl: 'Raporlar' },
+    { id: 'settings', lbl: 'Ayarlar' },
+  ];
 
   return (
     <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', padding: 32 }}>
-      {/* Sidebar */}
       <div style={{ width: 190, display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4, flexShrink: 0 }}>
-        {/* Logo */}
         <div style={{ marginBottom: 18, paddingLeft: 4 }}>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 20, color: T.primary, letterSpacing: '-.02em' }}>Para<span style={{ color: T.success }}>Cep</span></div>
           <div style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 500, marginTop: 1 }}>Mobil Prototip v1.2</div>
         </div>
         <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '.08em', padding: '0 12px', marginBottom: 2 }}>Ekranlar</div>
         {navItems.map((n) =>
-        <button key={n.id} className={`sidebar-btn${screen === n.id || n.id === 'fab' && modal ? ' active' : ''}`} onClick={() => navigate(n.id)}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary, opacity: screen === n.id || n.id === 'fab' && modal ? 1 : 0, flexShrink: 0 }} />
+          <button key={n.id} className={`sidebar-btn${screen === n.id || (n.id === 'fab' && modal) ? ' active' : ''}`} onClick={() => navigate(n.id)}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary, opacity: screen === n.id || (n.id === 'fab' && modal) ? 1 : 0, flexShrink: 0 }} />
             {n.lbl}
           </button>
         )}
@@ -900,49 +961,22 @@ function App() {
           <div style={{ fontSize: 10, color: '#6B7280', lineHeight: 1.5 }}>Tab bar veya sol menü<br />ile gezinin</div>
         </div>
       </div>
-
-      {/* Phone */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '.07em' }}>{screenTitles[screen] || 'İşlem Ekle'}</div>
         <PhoneShell T={T}>
-          {screen !== 'settings' &&
-          <AppHeader title={screenTitles[screen] || 'ParaCep'} T={T} onSettings={() => navigate('settings')} showNotif={screen === 'home'} />
-          }
-          {screen === 'settings' &&
-          <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>Ayarlar</span>
-            </div>
-          }
+          {renderHeader()}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
             {renderScreen()}
             {modal && <QuickAddModal onClose={() => setModal(false)} T={T} />}
           </div>
-          {/* Custom tab bar with budgets */}
           <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0 }}>
-            {[
-            { id: 'home', lbl: 'Ana Sayfa', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg> },
-            { id: 'debts', lbl: 'Borçlar', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg> },
-            { id: 'fab', lbl: '', icon: null },
-            { id: 'txns', lbl: 'İşlemler', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /></svg> },
-            { id: 'reports', lbl: 'Raporlar', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg> }].
-            map((t) => t.id === 'fab' ?
-            <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                <button onClick={() => navigate('fab')} style={{ width: 52, height: 52, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: -18 }}>
-                  <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                </button>
-              </div> :
-
-            <button key={t.id} onClick={() => navigate(t.id)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0, minHeight: 44 }}>
-                {t.icon(screen === t.id ? T.primary : T.textMut)}
-                <span style={{ fontSize: 9, fontWeight: 600, color: screen === t.id ? T.primary : T.textMut }}>{t.lbl}</span>
-              </button>
-            )}
+            {renderTabBar(20, 9, -18)}
           </div>
         </PhoneShell>
         <div style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center' }}>Tweaks ile tema & grafik stilini değiştirin</div>
       </div>
-    </div>);
-
+    </div>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
