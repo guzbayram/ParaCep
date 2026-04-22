@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParaCep — Kişisel Finans</title>
+<meta name="description" content="Gelir, gider, borç ve bütçeni tek yerden takip et">
+<meta name="theme-color" content="#7C3AED">
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ParaCep">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+
+<!-- Open Graph -->
+<meta property="og:title" content="ParaCep — Kişisel Finans">
+<meta property="og:description" content="Gelir, gider, borç ve bütçeni tek yerden takip et">
+<meta property="og:type" content="website">
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#E8ECF0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;overflow:hidden}
+::-webkit-scrollbar{width:0px}
+.sidebar-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:#475569;width:100%;text-align:left;transition:all .15s}
+.sidebar-btn:hover{background:rgba(255,255,255,.7);color:#1E3A5F}
+.sidebar-btn.active{background:#fff;color:#1E3A5F;font-weight:600;box-shadow:0 1px 4px rgba(30,58,95,.12)}
+/* Tweaks panel */
+#tweaks-panel{position:fixed;bottom:24px;right:24px;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.18);padding:20px;width:260px;z-index:9999;display:none;font-family:'DM Sans',sans-serif}
+#tweaks-panel.visible{display:block}
+#tweaks-panel h3{font-size:13px;font-weight:700;color:#111827;margin-bottom:14px;letter-spacing:.03em}
+.tweak-row{margin-bottom:12px}
+.tweak-label{font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
+.tweak-toggle{display:flex;background:#F3F4F6;border-radius:8px;padding:2px;gap:2px}
+.tweak-toggle button{flex:1;padding:5px 0;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;background:transparent;color:#6B7280}
+.tweak-toggle button.on{background:#fff;color:#1E3A5F;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="tweaks-panel">
+  <h3>⚙ Tweaks</h3>
+  <div class="tweak-row">
+    <div class="tweak-label">Tema</div>
+    <div class="tweak-toggle" id="theme-toggle">
+      <button class="on" onclick="setTheme('light')">Açık</button>
+      <button onclick="setTheme('dark')">Koyu</button>
+    </div>
+  </div>
+  <div class="tweak-row">
+    <div class="tweak-label">Vurgu Rengi</div>
+    <div class="tweak-toggle" id="accent-toggle">
+      <button class="on" onclick="setAccent('navy')">Lacivert</button>
+      <button onclick="setAccent('green')">Yeşil</button>
+      <button onclick="setAccent('purple')">Mor</button>
+    </div>
+  </div>
+  <div class="tweak-row">
+    <div class="tweak-label">Grafik Stili</div>
+    <div class="tweak-toggle" id="chart-toggle">
+      <button class="on" onclick="setChart('bar')">Bar</button>
+      <button onclick="setChart('line')">Çizgi</button>
+    </div>
+  </div>
+</div>
+<script>
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "light",
+  "accent": "purple",
+  "chartStyle": "line"
+}/*EDITMODE-END*/;
+let tweakState = {...TWEAK_DEFAULTS};
+function setTheme(v){tweakState.theme=v;updateTweakBtns('theme-toggle',v==='light'?0:1);window.__setTheme&&window.__setTheme(v);postEdit()}
+function setAccent(v){tweakState.accent=v;updateTweakBtns('accent-toggle',['green','purple','orange','rose','blue','teal'].indexOf(v));window.__setAccent&&window.__setAccent(v);postEdit()}
+function setChart(v){tweakState.chartStyle=v;updateTweakBtns('chart-toggle',v==='bar'?0:1);window.__setChart&&window.__setChart(v);postEdit()}
+function updateTweakBtns(id,activeIdx){const btns=document.getElementById(id).querySelectorAll('button');btns.forEach((b,i)=>b.classList.toggle('on',i===activeIdx))}
+function postEdit(){window.parent.postMessage({type:'__edit_mode_set_keys',edits:tweakState},'*')}
+window.addEventListener('message',e=>{
+  if(e.data?.type==='__activate_edit_mode')document.getElementById('tweaks-panel').classList.add('visible');
+  if(e.data?.type==='__deactivate_edit_mode')document.getElementById('tweaks-panel').classList.remove('visible');
+});
+window.parent.postMessage({type:'__edit_mode_available'},'*');
+</script>
+<script type="text/babel">
+
+
+
+
+// ─── THEME SYSTEM ─────────────────────────────────────────────────────────────
+const ACCENTS = {
+  green:  { primary: '#059669', primaryDark: '#047857', primaryLight: '#ECFDF5', fab: '0 4px 14px rgba(5,150,105,.35)' },
+  purple: { primary: '#7C3AED', primaryDark: '#6D28D9', primaryLight: '#F5F3FF', fab: '0 4px 14px rgba(124,58,237,.35)' },
+  orange: { primary: '#F97316', primaryDark: '#EA580C', primaryLight: '#FFF7ED', fab: '0 4px 14px rgba(249,115,22,.35)' },
+  rose:   { primary: '#E11D48', primaryDark: '#BE123C', primaryLight: '#FFF1F2', fab: '0 4px 14px rgba(225,29,72,.35)' },
+  blue:   { primary: '#2563EB', primaryDark: '#1D4ED8', primaryLight: '#EFF6FF', fab: '0 4px 14px rgba(37,99,235,.35)' },
+  teal:   { primary: '#0D9488', primaryDark: '#0F766E', primaryLight: '#F0FDFA', fab: '0 4px 14px rgba(13,148,136,.35)' },
+};
+
+function makeTheme(mode, accentKey) {
+  const acc = ACCENTS[accentKey] || ACCENTS.purple;
+  const dark = mode === 'dark';
+  return {
+    ...acc,
+    dark,
+    success: '#059669', successBg: dark ? '#064E3B20' : '#ECFDF5',
+    warning: '#D97706', warningBg: dark ? '#78350F20' : '#FFFBEB',
+    danger: '#DC2626', dangerBg: dark ? '#7F1D1D20' : '#FEF2F2',
+    bg: dark ? '#0F172A' : '#F9FAFB',
+    surface: dark ? '#1E293B' : '#FFFFFF',
+    surface2: dark ? '#263248' : '#F3F4F6',
+    border: dark ? '#334155' : '#E5E7EB',
+    borderSub: dark ? '#1E293B' : '#F3F4F6',
+    text: dark ? '#F1F5F9' : '#111827',
+    textSub: dark ? '#94A3B8' : '#6B7280',
+    textMut: dark ? '#64748B' : '#9CA3AF',
+    shellBg: dark ? '#0F172A' : '#F9FAFB',
+    statusTxt: dark ? '#F1F5F9' : '#111827',
+    cardShadow: dark ? 'none' : '0 1px 3px rgba(0,0,0,.07)'
+  };
+}
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const DATA = {
+  balance: 8240.50,
+  income: 12000,
+  expense: 3759.50,
+  upcoming: [
+  { label: 'Elektrik Faturası', date: '25.04', amount: 280, daysLeft: 3, icon: '⚡' },
+  { label: 'Garanti Kredi Kartı', date: '27.04', amount: 1850, daysLeft: 5, icon: '💳' },
+  { label: 'Konut Kredisi', date: '01.05', amount: 3200, daysLeft: 9, icon: '🏠' },
+  { label: 'İnternet Faturası', date: '03.05', amount: 149, daysLeft: 11, icon: '📡' }],
+
+  transactions: [
+  { id: 1, label: 'Market Alışverişi', cat: 'Mutfak', date: '21.04.2026', amount: -342.80, catColor: '#F59E0B' },
+  { id: 2, label: 'Maaş', cat: 'Gelir', date: '01.04.2026', amount: 10000, catColor: '#059669' },
+  { id: 3, label: 'Akaryakıt', cat: 'Ulaşım', date: '20.04.2026', amount: -650, catColor: '#8B5CF6' },
+  { id: 4, label: 'Netflix', cat: 'Abonelik', date: '18.04.2026', amount: -59.90, catColor: '#EF4444' },
+  { id: 5, label: 'Elektrik Faturası', cat: 'Ev Giderleri', date: '15.04.2026', amount: -265, catColor: '#3B82F6' },
+  { id: 6, label: 'Freelance Gelir', cat: 'Gelir', date: '10.04.2026', amount: 2000, catColor: '#059669' },
+  { id: 7, label: 'Restoran', cat: 'Mutfak', date: '08.04.2026', amount: -420, catColor: '#F59E0B' },
+  { id: 8, label: 'Kıyafet', cat: 'Giyim', date: '05.04.2026', amount: -890, catColor: '#EC4899' },
+  { id: 9, label: 'Eczane', cat: 'Sağlık', date: '03.04.2026', amount: -132, catColor: '#10B981' },
+  { id: 10, label: 'Su Faturası', cat: 'Ev Giderleri', date: '02.04.2026', amount: -85, catColor: '#3B82F6' }],
+
+  cards: [
+  { name: 'Garanti BBVA', limit: 15000, balance: 4250, due: '27.04', color: '#1E3A5F' },
+  { name: 'Yapı Kredi', limit: 8000, balance: 1200, due: '02.05', color: '#059669' },
+  { name: 'Akbank Axess', limit: 12000, balance: 7800, due: '30.04', color: '#DC2626' }],
+
+  loans: [
+  { name: 'Konut Kredisi', bank: 'Ziraat Bankası', monthly: 3200, remaining: 187200, totalPaid: 28800, installments: 60, remaining_count: 48 },
+  { name: 'Taşıt Kredisi', bank: 'Halkbank', monthly: 1450, remaining: 21750, totalPaid: 14500, installments: 25, remaining_count: 15 }],
+
+  monthLabels: ['Kas', 'Ara', 'Oca', 'Şub', 'Mar', 'Nis'],
+  monthIncomes: [9500, 11000, 10000, 12000, 10500, 12000],
+  monthExpenses: [7200, 8100, 7800, 9200, 8900, 3760],
+  cats: [
+  { name: 'Ev Giderleri', pct: 38, amt: 1428.60, color: '#1E3A5F' },
+  { name: 'Mutfak', pct: 22, amt: 826.90, color: '#F59E0B' },
+  { name: 'Ulaşım', pct: 15, amt: 563.90, color: '#8B5CF6' },
+  { name: 'Giyim', pct: 12, amt: 451.10, color: '#EC4899' },
+  { name: 'Diğer', pct: 13, amt: 488.90, color: '#9CA3AF' }],
+
+  budgets: [
+  { name: 'Mutfak Bütçesi', icon: '🛒', monthly: 2000, spent: 1248.90, color: '#F59E0B' },
+  { name: 'Tatil Birikimi', icon: '✈️', target: 8000, saved: 3200, color: '#3B82F6', type: 'saving' },
+  { name: 'Öğrenci Gid.', icon: '🎓', monthly: 1500, spent: 870, color: '#8B5CF6' },
+  { name: 'Acil Fon', icon: '🛡️', target: 20000, saved: 8500, color: '#059669', type: 'saving' }]
+
+};
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const fmt = (v) => `₺${Math.abs(v).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
+const fmtK = (v) => v >= 1000 ? `₺${(v / 1000).toLocaleString('tr-TR', { minimumFractionDigits: 0 })}B` : fmt(v);
+
+// ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
+function Card({ children, style = {}, T }) {
+  return <div style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, boxShadow: T.cardShadow, ...style }}>{children}</div>;
+}
+function Pill({ label, active, onClick, T, color }) {
+  return <button onClick={onClick} style={{ padding: '6px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 600, border: `1.5px solid ${active ? color || T.primary : T.border}`, cursor: 'pointer', background: active ? color || T.primary : 'transparent', color: active ? '#fff' : T.textSub, fontFamily: "'DM Sans',sans-serif", transition: 'all .15s' }}>{label}</button>;
+}
+function SegControl({ tabs, active, onChange, T }) {
+  return <div style={{ display: 'flex', background: T.surface2, borderRadius: 10, padding: 3, gap: 2 }}>
+    {tabs.map(([id, lbl]) =>
+    <button key={id} onClick={() => onChange(id)} style={{ flex: 1, padding: '8px 0', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: active === id ? T.surface : 'transparent', color: active === id ? T.primary : T.textSub, boxShadow: active === id ? T.cardShadow : 'none', transition: 'all .15s' }}>{lbl}</button>
+    )}
+  </div>;
+}
+function ProgressBar({ value, color, T, height = 7 }) {
+  return <div style={{ height, background: T.surface2, borderRadius: 9999, overflow: 'hidden' }}>
+    <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color || T.primary, borderRadius: 9999, transition: 'width .6s ease' }} />
+  </div>;
+}
+function MonoAmt({ value, type, size = 14 }) {
+  const colors = { income: '#059669', expense: '#DC2626', warn: '#D97706', neutral: 'inherit' };
+  const pfx = type === 'income' ? '+' : type === 'expense' ? '−' : '';
+  return <span style={{ fontFamily: "'DM Mono',monospace", fontSize: size, fontWeight: 500, color: colors[type] || 'inherit' }}>{pfx}{fmt(value)}</span>;
+}
+function SectionHdr({ title, action, onAction, T }) {
+  return <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+    <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{title}</span>
+    {action && <button onClick={onAction} style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: T.primary, cursor: 'pointer', padding: 0 }}>{action} →</button>}
+  </div>;
+}
+function Scroller({ children, style = {} }) {
+  return <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 11, ...style }}>{children}</div>;
+}
+
+// ─── SVG CHARTS ───────────────────────────────────────────────────────────────
+function BarChart({ incomes, expenses, labels, T, lineMode = false }) {
+  const maxV = Math.max(...incomes, ...expenses);
+  const W = 280,H = 100,n = labels.length,bw = Math.floor(W / n),pad = 6;
+  if (lineMode) {
+    const pts = (arr) => arr.map((v, i) => `${i * (W / (n - 1))},${H - v / maxV * H}`).join(' ');
+    return <svg width={W} height={H + 20} style={{ overflow: 'visible' }}>
+      {[incomes, expenses].map((arr, di) => {
+        const color = di === 0 ? T.success : '#DC2626';
+        const points = arr.map((v, i) => ({ x: i * (W / (n - 1)), y: H - v / maxV * H }));
+        const d = 'M' + points.map((p) => `${p.x},${p.y}`).join(' L');
+        return <g key={di}>
+          <polyline points={pts(arr)} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+          {points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3.5" fill={color} />)}
+        </g>;
+      })}
+      {labels.map((l, i) => <text key={i} x={i * (W / (n - 1))} y={H + 16} textAnchor="middle" fontSize="10" fill={T.textSub} fontFamily="DM Sans">{l}</text>)}
+    </svg>;
+  }
+  return <svg width={W} height={H + 20} style={{ overflow: 'visible' }}>
+    {labels.map((l, i) => {
+      const x = i * bw + pad / 2;const bWidth = bw - pad;
+      const ih = incomes[i] / maxV * H;const eh = expenses[i] / maxV * H;
+      const hw = Math.floor(bWidth / 2) - 1;
+      return <g key={i}>
+        <rect x={x} y={H - ih} width={hw} height={ih} rx="2" fill={T.success} opacity=".75" />
+        <rect x={x + hw + 2} y={H - eh} width={hw} height={eh} rx="2" fill="#DC2626" opacity=".65" />
+        <text x={x + bWidth / 2} y={H + 16} textAnchor="middle" fontSize="10" fill={T.textSub} fontFamily="DM Sans">{l}</text>
+      </g>;
+    })}
+  </svg>;
+}
+
+function DonutChart({ cats, T }) {
+  const R = 54,r = 32,cx = 60,cy = 60;
+  let cur = 0;
+  const slices = cats.map((c) => {
+    const pct = c.pct / 100,start = cur,end = cur + pct;cur = end;
+    const s = start * 2 * Math.PI - Math.PI / 2;const e = end * 2 * Math.PI - Math.PI / 2;
+    const x1 = cx + R * Math.cos(s),y1 = cy + R * Math.sin(s);
+    const x2 = cx + R * Math.cos(e),y2 = cy + R * Math.sin(e);
+    const lf = pct > .5 ? 1 : 0;
+    const ix1 = cx + r * Math.cos(s),iy1 = cy + r * Math.sin(s);
+    const ix2 = cx + r * Math.cos(e),iy2 = cy + r * Math.sin(e);
+    return { d: `M${x1} ${y1} A${R} ${R} 0 ${lf} 1 ${x2} ${y2} L${ix2} ${iy2} A${r} ${r} 0 ${lf} 0 ${ix1} ${iy1}Z`, color: c.color };
+  });
+  return <svg width="120" height="120">
+    {slices.map((s, i) => <path key={i} d={s.d} fill={s.color} />)}
+    <circle cx={cx} cy={cy} r="26" fill={T.surface} />
+    <text x={cx} y={cy - 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={T.text} fontFamily="DM Sans">%</text>
+    <text x={cx} y={cy + 10} textAnchor="middle" fontSize="9" fill={T.textSub} fontFamily="DM Sans">dağılım</text>
+  </svg>;
+}
+
+// ─── STATUS BAR ───────────────────────────────────────────────────────────────
+function StatusBar({ T }) {
+  return <div style={{ height: 48, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 24px 8px', flexShrink: 0 }}>
+    <span style={{ fontSize: 13, fontWeight: 700, color: T.statusTxt }}>9:41</span>
+    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill={T.statusTxt}><rect x="0" y="5" width="3" height="7" rx="1" /><rect x="4.5" y="3" width="3" height="9" rx="1" /><rect x="9" y="1" width="3" height="11" rx="1" /><rect x="13.5" y="2" width="2" height="8" rx="0.5" opacity="0.3" /></svg>
+      <svg width="16" height="12" fill="none" stroke={T.statusTxt} strokeWidth="1.5" viewBox="0 0 16 12"><path d="M8 3C10.5 3 12.7 4 14.2 5.7L15.2 4.5C13.4 2.4 10.9 1 8 1S2.6 2.4.8 4.5L1.8 5.7C3.3 4 5.5 3 8 3Z" /><path d="M8 7C9.3 7 10.5 7.5 11.3 8.4L12.3 7.2C11.1 6 9.6 5.2 8 5.2S4.9 6 3.7 7.2L4.7 8.4C5.5 7.5 6.7 7 8 7Z" /><circle cx="8" cy="11" r="1.4" fill={T.statusTxt} /></svg>
+      <div style={{ width: 24, height: 12, border: `1.5px solid ${T.statusTxt}`, borderRadius: 3, position: 'relative', display: 'flex', alignItems: 'center', padding: '0 2px' }}>
+        <div style={{ width: '75%', height: 6, background: T.statusTxt, borderRadius: 1.5 }} />
+        <div style={{ position: 'absolute', right: -3.5, top: '50%', transform: 'translateY(-50%)', width: 3, height: 6, background: T.statusTxt, borderRadius: '0 2px 2px 0' }} />
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── TAB BAR ──────────────────────────────────────────────────────────────────
+function TabBar({ active, onTab, T }) {
+  const IconHome = (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>;
+  const IconCard = (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>;
+  const IconDoc = (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>;
+  const IconBar = (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>;
+  const tabs = [
+  { id: 'home', lbl: 'Ana Sayfa', icon: IconHome }, { id: 'debts', lbl: 'Borçlar', icon: IconCard },
+  { id: 'fab', lbl: '', icon: null },
+  { id: 'txns', lbl: 'İşlemler', icon: IconDoc }, { id: 'reports', lbl: 'Raporlar', icon: IconBar }];
+
+  return <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0 }}>
+    {tabs.map((t) => t.id === 'fab' ?
+    <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+        <button onClick={() => onTab('fab')} style={{ width: 56, height: 56, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: -20 }}>
+          <svg width="26" height="26" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+        </button>
+      </div> :
+
+    <button key={t.id} onClick={() => onTab(t.id)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0, minHeight: 44 }}>
+        {t.icon(active === t.id ? T.primary : T.textMut)}
+        <span style={{ fontSize: 10, fontWeight: 600, color: active === t.id ? T.primary : T.textMut }}>{t.lbl}</span>
+      </button>
+    )}
+  </div>;
+}
+
+// ─── HEADER ───────────────────────────────────────────────────────────────────
+function AppHeader({ title, T, onSettings, showNotif = true }) {
+  return <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+    <span style={{ fontSize: 16, fontWeight: 700, color: T.text, fontFamily: "'DM Sans',sans-serif" }}>{title}</span>
+    <div style={{ display: 'flex', gap: 6 }}>
+      {showNotif && <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textSub, padding: 4, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+      </button>}
+      <button onClick={onSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textSub, padding: 4, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+      </button>
+    </div>
+  </div>;
+}
+
+// ─── ANA SAYFA ────────────────────────────────────────────────────────────────
+function DashboardScreen({ T, onNav }) {
+  const netSavings = DATA.income - DATA.expense;
+  const savePct = Math.round(netSavings / DATA.income * 100);
+  return <Scroller>
+    {/* Hero Card */}
+    <div style={{ background: `linear-gradient(145deg, ${T.primary} 0%, ${T.primaryDark} 100%)`, color: '#fff', position: 'relative', overflow: 'hidden', textAlign: "center", fontWeight: "300", height: "40px", padding: "20px 20px 60px", margin: "0px 0px 21.997284px", borderStyle: "solid", borderWidth: "0px", borderRadius: "18px" }}>
+      <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
+      <div style={{ position: 'absolute', bottom: -30, right: 30, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,.05)' }} />
+      <div style={{ marginBottom: 3, fontWeight: 500, textAlign: "center", lineHeight: "1.4", fontSize: "1px", opacity: "7", padding: "0px", margin: "0px", borderRadius: "0px" }}>Net Bakiye · Nisan 2026</div>
+      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 30, fontWeight: 500, letterSpacing: '-.02em', textAlign: "center" }}>{fmt(DATA.balance)}</div>
+      <div style={{ display: 'flex', gap: 16, marginTop: 14 }}>
+        {[['+', DATA.income, 'Gelir'], ['-', DATA.expense, 'Gider']].map(([s, v, l]) =>
+        <div key={l} style={{ background: 'rgba(255,255,255,.12)', borderRadius: 10, padding: '8px 12px', flex: 1 }}>
+            <div style={{ fontSize: 10, opacity: .7, marginBottom: 3 }}>{l}</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 500 }}>{s}{fmt(v)}</div>
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, opacity: .7, marginBottom: 5 }}>
+          <span>Tasarruf Oranı</span><span>%{savePct}</span>
+        </div>
+        <div style={{ height: 5, background: 'rgba(255,255,255,.25)', borderRadius: 9999 }}>
+          <div style={{ width: `${savePct}%`, height: '100%', background: '#fff', borderRadius: 9999 }} />
+        </div>
+      </div>
+    </div>
+
+    {/* Upcoming Payments */}
+    <Card T={T}>
+      <div style={{ padding: '14px 14px 0' }}>
+        <SectionHdr title="Yaklaşan Ödemeler" action="Tümü" onAction={() => onNav('debts')} T={T} />
+      </div>
+      {DATA.upcoming.map((u, i) =>
+      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: i < DATA.upcoming.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: T.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{u.icon}</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{u.label}</div>
+              <div style={{ fontSize: 11, color: T.textSub }}>{u.date}</div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 500, color: T.text }}>{fmt(u.amount)}</div>
+            <span style={{ display: 'inline-block', marginTop: 3, padding: '2px 7px', borderRadius: 9999, fontSize: 10, fontWeight: 700, background: u.daysLeft <= 5 ? '#FEF2F2' : '#FFFBEB', color: u.daysLeft <= 5 ? '#DC2626' : '#D97706' }}>{u.daysLeft} gün</span>
+          </div>
+        </div>
+      )}
+    </Card>
+
+    {/* Budget summary */}
+    <SectionHdr title="Bütçe & Birikimler" action="Tümü" onAction={() => onNav('budgets')} T={T} />
+    {DATA.budgets.map((b, i) => {
+      const isSaving = b.type === 'saving';
+      const val = isSaving ? Math.round(b.saved / b.target * 100) : Math.round(b.spent / b.monthly * 100);
+      const color = val > 80 ? isSaving ? T.success : T.danger : val > 60 ? T.warning : isSaving ? T.success : T.primary;
+      return (
+        <Card key={i} T={T} style={{ padding: '12px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>{b.icon}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{b.name}</span>
+            </div>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: T.textSub }}>
+              {isSaving ? `${fmtK(b.saved)} / ${fmtK(b.target)}` : `${fmtK(b.spent)} / ${fmtK(b.monthly)}`}
+            </span>
+          </div>
+          <ProgressBar value={val} color={color} T={T} height={6} />
+          <div style={{ fontSize: 10, color: T.textMut, marginTop: 4 }}>%{val} {isSaving ? 'tamamlandı' : 'kullanıldı'}</div>
+        </Card>);
+
+    })}
+  </Scroller>;
+}
+
+// ─── BORÇLAR ──────────────────────────────────────────────────────────────────
+function DebtsScreen({ T }) {
+  const [tab, setTab] = React.useState('cards');
+  const totalCard = DATA.cards.reduce((s, c) => s + c.balance, 0);
+  const totalLoan = DATA.loans.reduce((s, l) => s + l.remaining, 0);
+  return <>
+    <div style={{ padding: '12px 16px 0', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+      <SegControl tabs={[['cards', 'Kredi Kartı'], ['loans', 'Banka Kredisi']]} active={tab} onChange={setTab} T={T} />
+    </div>
+    <Scroller>
+      {tab === 'cards' ? <>
+        {/* Summary */}
+        <div style={{ background: `linear-gradient(145deg,${T.primary},${T.primaryDark})`, borderRadius: 16, padding: '16px 18px', color: '#fff' }}>
+          <div style={{ fontSize: 11, opacity: .65 }}>Toplam Kart Borcu</div>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 26, fontWeight: 500, marginTop: 2 }}>{fmt(totalCard)}</div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            {DATA.cards.map((c, i) =>
+            <div key={i} style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 8, padding: '7px 8px' }}>
+                <div style={{ fontSize: 9, opacity: .7, marginBottom: 2 }}>{c.name.split(' ')[0]}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 500 }}>{fmtK(c.balance)}</div>
+              </div>
+            )}
+          </div>
+        </div>
+        {/* Cards */}
+        {DATA.cards.map((c, i) => {
+          const pct = Math.round(c.balance / c.limit * 100);
+          const alertColor = pct >= 60 ? T.danger : pct >= 40 ? T.warning : T.success;
+          return (
+            <Card key={i} T={T} style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>Son ödeme: {c.due}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 500, color: pct >= 60 ? T.danger : T.text }}>{fmt(c.balance)}</div>
+                  <div style={{ fontSize: 11, color: T.textSub }}>/ {fmt(c.limit)} limit</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <ProgressBar value={pct} color={alertColor} T={T} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+                  <span style={{ fontSize: 10, color: T.textSub }}>Kullanım %{pct}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: alertColor }}>{pct >= 60 ? 'Yüksek risk' : pct >= 40 ? 'Orta' : 'Düşük'}</span>
+                </div>
+              </div>
+            </Card>);
+
+        })}
+        <button style={{ width: '100%', padding: '12px 0', borderRadius: 12, background: T.primaryLight, border: `1.5px dashed ${T.primary}`, color: T.primary, fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Yeni Kart Ekle</button>
+      </> : <>
+        <div style={{ background: `linear-gradient(145deg,#111827,#1F2937)`, borderRadius: 16, padding: '16px 18px', color: '#fff' }}>
+          <div style={{ fontSize: 11, opacity: .65 }}>Toplam Kredi Borcu</div>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 26, fontWeight: 500, marginTop: 2 }}>{fmtK(totalLoan)}</div>
+          <div style={{ fontSize: 11, opacity: .5, marginTop: 6 }}>{DATA.loans.length} aktif kredi</div>
+        </div>
+        {DATA.loans.map((l, i) => {
+          const paidPct = Math.round(l.totalPaid / (l.remaining + l.totalPaid) * 100);
+          return (
+            <Card key={i} T={T} style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{l.name}</div>
+                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>{l.bank} · {l.remaining_count}/{l.installments} taksit</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, fontWeight: 500, color: T.text }}>{fmt(l.monthly)}<span style={{ fontSize: 10, fontFamily: "'DM Sans'" }}>/ay</span></div>
+                  <div style={{ fontSize: 11, color: T.textSub }}>Kalan: {fmtK(l.remaining)}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <ProgressBar value={paidPct} color={T.success} T={T} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+                  <span style={{ fontSize: 10, color: T.textSub }}>%{paidPct} ödendi</span>
+                  <span style={{ fontSize: 10, color: T.textSub }}>{fmtK(l.totalPaid)} ödenen</span>
+                </div>
+              </div>
+            </Card>);
+
+        })}
+      </>}
+    </Scroller>
+  </>;
+}
+
+// ─── İŞLEMLER ─────────────────────────────────────────────────────────────────
+function TransactionsScreen({ T }) {
+  const [filter, setFilter] = React.useState('all');
+  const [search, setSearch] = React.useState('');
+  const filtered = DATA.transactions.filter((t) => {
+    if (filter === 'income' && t.amount <= 0) return false;
+    if (filter === 'expense' && t.amount >= 0) return false;
+    if (search && !t.label.toLowerCase().includes(search.toLowerCase()) && !t.cat.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+  const total = filtered.reduce((s, t) => s + t.amount, 0);
+  return <>
+    <div style={{ padding: '12px 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+      {/* Search */}
+      <div style={{ display: 'flex', alignItems: 'center', background: T.surface2, borderRadius: 10, padding: '0 12px', marginBottom: 10, height: 38 }}>
+        <svg width="15" height="15" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="İşlem ara..." style={{ background: 'none', border: 'none', outline: 'none', marginLeft: 8, flex: 1, fontSize: 13, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+      </div>
+      {/* Filter pills */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[['all', 'Tümü'], ['income', 'Gelir'], ['expense', 'Gider']].map(([id, lbl]) =>
+        <Pill key={id} label={lbl} active={filter === id} onClick={() => setFilter(id)} T={T} />
+        )}
+        <div style={{ flex: 1, textAlign: 'right', fontFamily: "'DM Mono',monospace", fontSize: 12, color: total >= 0 ? T.success : T.danger, alignSelf: 'center' }}>{total >= 0 ? '+' : '-'}{fmt(Math.abs(total))}</div>
+      </div>
+    </div>
+    <Scroller>
+      {filtered.length === 0 ?
+      <div style={{ textAlign: 'center', padding: '40px 0', color: T.textSub }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+          <div style={{ fontWeight: 600 }}>İşlem bulunamadı</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>Farklı bir arama terimi deneyin</div>
+        </div> :
+
+      <Card T={T} style={{ padding: '0 4px' }}>
+          {filtered.map((t, i) =>
+        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 12px', borderBottom: i < filtered.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 11, background: t.catColor + '1A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.catColor }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{t.label}</div>
+                  <div style={{ fontSize: 11, color: T.textSub }}>{t.date.slice(0, 5)} · {t.cat}</div>
+                </div>
+              </div>
+              <MonoAmt value={Math.abs(t.amount)} type={t.amount > 0 ? 'income' : 'expense'} size={13} />
+            </div>
+        )}
+        </Card>
+      }
+    </Scroller>
+  </>;
+}
+
+// ─── RAPORLAR ─────────────────────────────────────────────────────────────────
+function ReportsScreen({ T, chartStyle }) {
+  const [period, setPeriod] = React.useState('6ay');
+  const maxIncome = Math.max(...DATA.monthIncomes);
+  const maxExpense = Math.max(...DATA.monthExpenses);
+  return <Scroller>
+    {/* Summary cards */}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      {[
+      ['Toplam Gelir', DATA.income, 'income'],
+      ['Toplam Gider', DATA.expense, 'expense'],
+      ['Net Tasarruf', DATA.income - DATA.expense, 'income'],
+      ['Tasarruf Oranı', null, 'neutral']].
+      map(([lbl, val, type], i) =>
+      <Card key={i} T={T} style={{ padding: '12px 14px' }}>
+          <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>{lbl}</div>
+          {i === 3 ?
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 500, color: T.success }}>%{Math.round((DATA.income - DATA.expense) / DATA.income * 100)}</div> :
+
+        <MonoAmt value={val} type={type} size={15} />
+        }
+        </Card>
+      )}
+    </div>
+
+    {/* Trend Chart */}
+    <Card T={T} style={{ padding: '14px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Gelir / Gider Trendi</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: T.textSub }}><span style={{ width: 8, height: 8, borderRadius: 2, background: T.success, display: 'inline-block' }} />Gelir</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: T.textSub }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#DC2626', display: 'inline-block' }} />Gider</span>
+        </div>
+      </div>
+      <BarChart incomes={DATA.monthIncomes} expenses={DATA.monthExpenses} labels={DATA.monthLabels} T={T} lineMode={chartStyle === 'line'} />
+    </Card>
+
+    {/* Category breakdown */}
+    <Card T={T} style={{ padding: '14px 16px' }}>
+      <SectionHdr title="Harcama Dağılımı" T={T} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <DonutChart cats={DATA.cats} T={T} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {DATA.cats.map((c, i) =>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: c.color, flexShrink: 0 }} />
+              <div style={{ flex: 1, fontSize: 11, color: T.text, fontWeight: 500 }}>{c.name}</div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: T.textSub }}>%{c.pct}</div>
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={{ marginTop: 14, borderTop: `1px solid ${T.border}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {DATA.cats.map((c, i) =>
+        <div key={i}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: T.text }}>{c.name}</span>
+              <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: T.textSub }}>{fmt(c.amt)}</span>
+            </div>
+            <ProgressBar value={c.pct} color={c.color} T={T} height={5} />
+          </div>
+        )}
+      </div>
+    </Card>
+
+    {/* Monthly comparison */}
+    <Card T={T} style={{ padding: '14px 16px' }}>
+      <SectionHdr title="Aylık Karşılaştırma" T={T} />
+      {DATA.monthLabels.map((m, i) =>
+      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: i < DATA.monthLabels.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.textSub, width: 30 }}>{m}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ height: 4, background: T.surface2, borderRadius: 9999, overflow: 'hidden', marginBottom: 2 }}>
+              <div style={{ width: `${DATA.monthIncomes[i] / maxIncome * 100}%`, height: '100%', background: T.success, borderRadius: 9999 }} />
+            </div>
+            <div style={{ height: 4, background: T.surface2, borderRadius: 9999, overflow: 'hidden' }}>
+              <div style={{ width: `${DATA.monthExpenses[i] / maxIncome * 100}%`, height: '100%', background: '#DC2626', borderRadius: 9999, opacity: .7 }} />
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', width: 60 }}>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: T.success }}>{fmtK(DATA.monthIncomes[i])}</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: '#DC2626' }}>{fmtK(DATA.monthExpenses[i])}</div>
+          </div>
+        </div>
+      )}
+    </Card>
+  </Scroller>;
+}
+
+// ─── BÜTÇE MODÜLLERİ ─────────────────────────────────────────────────────────
+function BudgetsScreen({ T }) {
+  const [sel, setSel] = React.useState(null);
+  if (sel !== null) {
+    const b = DATA.budgets[sel];
+    const isSaving = b.type === 'saving';
+    const val = isSaving ? Math.round(b.saved / b.target * 100) : Math.round(b.spent / b.monthly * 100);
+    return <>
+      <div style={{ padding: '12px 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => setSel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.primary, padding: 0, display: 'flex', alignItems: 'center' }}>
+          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+        <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{b.icon} {b.name}</span>
+      </div>
+      <Scroller>
+        <Card T={T} style={{ padding: 18 }}>
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <div style={{ fontSize: 36, marginBottom: 6 }}>{b.icon}</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 28, fontWeight: 500, color: T.primary }}>
+              {isSaving ? fmt(b.saved) : fmt(b.spent)}
+            </div>
+            <div style={{ fontSize: 13, color: T.textSub, marginTop: 4 }}>
+              {isSaving ? `${fmt(b.target)} hedefin` : `${fmt(b.monthly)} bütçenin`} {isSaving ? '' : 'kullanıldı'}
+            </div>
+            <div style={{ marginTop: 16, marginBottom: 8 }}>
+              <ProgressBar value={val} color={val > 80 ? isSaving ? T.success : T.danger : T.primary} T={T} height={10} />
+            </div>
+            <div style={{ fontSize: 12, color: T.textSub }}>%{val} {isSaving ? 'tamamlandı' : 'kullanıldı'}</div>
+          </div>
+        </Card>
+        <Card T={T} style={{ padding: '14px 16px' }}>
+          <SectionHdr title="Kalan" T={T} />
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 500, color: T.success }}>
+            {isSaving ? fmt(b.target - b.saved) : fmt(b.monthly - b.spent)}
+          </div>
+          <div style={{ fontSize: 12, color: T.textSub, marginTop: 4 }}>{isSaving ? 'hedefe kalan' : 'bu ay kalan'}</div>
+        </Card>
+        <button style={{ width: '100%', padding: '14px 0', borderRadius: 12, background: T.primary, border: 'none', color: '#fff', fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          {isSaving ? 'Birikim Ekle' : 'Harcama Ekle'}
+        </button>
+      </Scroller>
+    </>;
+  }
+  return <>
+    <div style={{ padding: '12px 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+      <div style={{ fontSize: 13, color: T.textSub }}>Aktif modüller</div>
+    </div>
+    <Scroller>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {DATA.budgets.map((b, i) => {
+          const isSaving = b.type === 'saving';
+          const val = isSaving ? Math.round(b.saved / b.target * 100) : Math.round(b.spent / b.monthly * 100);
+          const alertColor = val > 80 ? isSaving ? T.success : T.danger : T.primary;
+          return (
+            <button key={i} onClick={() => setSel(i)} style={{ background: T.surface, borderRadius: 14, border: `1px solid ${T.border}`, padding: '14px 14px', textAlign: 'left', cursor: 'pointer', boxShadow: T.cardShadow }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{b.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>{b.name}</div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, color: alertColor }}>{isSaving ? `₺${(b.saved / 1000).toFixed(1)}B` : fmt(b.spent)}</div>
+              <div style={{ marginTop: 8 }}>
+                <ProgressBar value={val} color={alertColor} T={T} height={5} />
+              </div>
+              <div style={{ fontSize: 10, color: T.textMut, marginTop: 4 }}>%{val}</div>
+            </button>);
+
+        })}
+      </div>
+      <button style={{ width: '100%', padding: '12px 0', borderRadius: 12, background: T.primaryLight, border: `1.5px dashed ${T.primary}`, color: T.primary, fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Yeni Modül Ekle</button>
+    </Scroller>
+  </>;
+}
+
+// ─── AYARLAR ──────────────────────────────────────────────────────────────────
+const ACCENT_META = [
+  { key: 'purple', label: 'Mor',     color: '#7C3AED' },
+  { key: 'green',  label: 'Yeşil',   color: '#059669' },
+  { key: 'orange', label: 'Turuncu', color: '#F97316' },
+  { key: 'rose',   label: 'Gül',     color: '#E11D48' },
+  { key: 'blue',   label: 'Mavi',    color: '#2563EB' },
+  { key: 'teal',   label: 'Turkuaz', color: '#0D9488' },
+];
+
+function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent }) {
+  const sections = [
+  { title: 'Hesap', items: [
+    { icon: '👤', label: 'Profil Bilgileri', sub: 'Adı güncelle' },
+    { icon: '🔒', label: 'Güvenlik', sub: 'PIN, biyometrik' }]
+  },
+  { title: 'Tercihler', items: [
+    { icon: isDark ? '☀️' : '🌙', label: isDark ? 'Açık Mod' : 'Koyu Mod', sub: 'Tema değiştir', onTap: onToggleDark },
+    { icon: '🌍', label: 'Dil', sub: 'Türkçe' },
+    { icon: '💱', label: 'Para Birimi', sub: 'TL (₺)' }]
+  },
+  { title: 'Veri', items: [
+    { icon: '💾', label: 'Yedekleme', sub: 'Son yedek: bugün' },
+    { icon: '📤', label: 'Dışa Aktar', sub: 'CSV, JSON' },
+    { icon: '🗑️', label: 'Tüm Veriyi Sil', sub: 'Geri alınamaz', danger: true }]
+  },
+  { title: 'Hakkında', items: [
+    { icon: '📋', label: 'ParaCep', sub: 'Sürüm 1.2.0' },
+    { icon: '❓', label: 'Yardım & SSS', sub: '' }]
+  }];
+
+  return <Scroller>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.surface, borderRadius: 14, padding: '16px 14px', border: `1px solid ${T.border}` }}>
+      <div style={{ width: 52, height: 52, borderRadius: '50%', background: T.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👤</div>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Kullanıcı Adı</div>
+        <div style={{ fontSize: 12, color: T.textSub }}>kullanici@email.com</div>
+      </div>
+    </div>
+
+    {/* Accent colour picker */}
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Vurgu Rengi</div>
+      <Card T={T} style={{ padding: '14px 14px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          {ACCENT_META.map((a) => {
+            const active = accent === a.key;
+            return (
+              <button key={a.key} onClick={() => onAccent(a.key)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: a.color, boxShadow: active ? `0 0 0 3px ${T.surface}, 0 0 0 5px ${a.color}` : 'none', transition: 'box-shadow .2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {active && <svg width="18" height="18" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: active ? a.color : T.textSub }}>{a.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+
+    {sections.map((sec, si) =>
+    <div key={si}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>{sec.title}</div>
+        <Card T={T} style={{ padding: '0 4px' }}>
+          {sec.items.map((item, ii) =>
+        <button key={ii} onClick={item.onTap} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 12px', borderBottom: ii < sec.items.length - 1 ? `1px solid ${T.border}` : 'none', background: 'none', border: 'none', cursor: item.onTap || item.danger ? 'pointer' : 'default', borderRadius: 0, textAlign: 'left' }}>
+              <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{item.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: item.danger ? T.danger : T.text }}>{item.label}</div>
+                {item.sub && <div style={{ fontSize: 11, color: T.textSub, marginTop: 1 }}>{item.sub}</div>}
+              </div>
+              {!item.danger && <svg width="16" height="16" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>}
+            </button>
+        )}
+        </Card>
+      </div>
+    )}
+  </Scroller>;
+}
+
+// ─── QUICK ADD MODAL ──────────────────────────────────────────────────────────
+function QuickAddModal({ onClose, T }) {
+  const [type, setType] = React.useState('expense');
+  const [amount, setAmount] = React.useState('');
+  const [cat, setCat] = React.useState('Mutfak');
+  const cats = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Gelir', 'Birikim', 'Diğer'];
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
+      <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)' }}>
+        <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text, textAlign: 'center', padding: '14px 0 12px', borderBottom: `1px solid ${T.border}` }}>İşlem Ekle</div>
+        <div style={{ marginTop: 14 }}>
+          <SegControl tabs={[['income', 'Gelir'], ['expense', 'Gider']]} active={type} onChange={setType} T={T} />
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tutar</div>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontFamily: "'DM Mono',monospace", fontSize: 18, color: T.textSub }}>₺</span>
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" type="number" style={{ width: '100%', height: 52, border: `1.5px solid ${T.primary}`, borderRadius: 10, padding: '0 14px 0 32px', fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 500, outline: 'none', boxShadow: `0 0 0 3px ${T.primaryLight}`, background: T.surface, color: T.text }} />
+          </div>
+        </div>
+        <div style={{ marginTop: 13 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {cats.map((c) =>
+            <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} T={T} />
+            )}
+          </div>
+        </div>
+        <div style={{ marginTop: 13 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tarih</div>
+          <div style={{ height: 42, border: `1px solid ${T.border}`, borderRadius: 10, background: T.surface2, display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 13, color: T.textSub }}>22.04.2026 — Bugün</div>
+        </div>
+        <button style={{ width: '100%', height: 52, background: T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: 'pointer', boxShadow: T.fab }}>Kaydet</button>
+      </div>
+    </div>);
+
+}
+
+// ─── PHONE SHELL ──────────────────────────────────────────────────────────────
+function PhoneShell({ children, T }) {
+  return (
+    <div style={{ width: 390, height: 844, background: T.shellBg, borderRadius: 46, overflow: 'hidden', position: 'relative', boxShadow: '0 28px 80px rgba(0,0,0,.28),inset 0 0 0 1.5px rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", transition: 'background .3s' }}>
+      <StatusBar T={T} />
+      {children}
+    </div>);
+
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = React.useState(() => localStorage.getItem('pc_screen') || 'home');
+  const [modal, setModal] = React.useState(false);
+  const [theme, setTheme] = React.useState(() => localStorage.getItem('pc_theme') || 'light');
+  const [accent, setAccent] = React.useState(() => localStorage.getItem('pc_accent') || 'purple');
+  const [chartStyle, setChartStyle] = React.useState('bar');
+
+  // Expose setters for tweaks panel
+  React.useEffect(() => {
+    window.__setTheme = (v) => {setTheme(v);localStorage.setItem('pc_theme', v);};
+    window.__setAccent = (v) => {setAccent(v);localStorage.setItem('pc_accent', v);};
+    window.__setChart = (v) => setChartStyle(v);
+  }, []);
+
+  const T = makeTheme(theme, accent);
+
+  const navigate = (id) => {
+    if (id === 'fab') {setModal(true);return;}
+    setScreen(id);
+    localStorage.setItem('pc_screen', id);
+  };
+
+  const screenTitles = { home: 'Ana Sayfa', debts: 'Borçlar', txns: 'İşlemler', reports: 'Raporlar', budgets: 'Bütçe & Birikimler', settings: 'Ayarlar' };
+
+  const renderScreen = () => {
+    switch (screen) {
+      case 'home':return <DashboardScreen T={T} onNav={navigate} />;
+      case 'debts':return <DebtsScreen T={T} />;
+      case 'txns':return <TransactionsScreen T={T} />;
+      case 'reports':return <ReportsScreen T={T} chartStyle={chartStyle} />;
+      case 'budgets':return <BudgetsScreen T={T} />;
+      case 'settings':return <SettingsScreen T={T} isDark={theme === 'dark'} onToggleDark={() => {const n = theme === 'dark' ? 'light' : 'dark';setTheme(n);localStorage.setItem('pc_theme', n);}} accent={accent} onAccent={(v) => {setAccent(v);localStorage.setItem('pc_accent', v);window.__setAccent&&window.__setAccent(v);}} />;
+      default:return <DashboardScreen T={T} onNav={navigate} />;
+    }
+  };
+
+  const navItems = [
+  { id: 'home', lbl: 'Ana Sayfa' }, { id: 'debts', lbl: 'Borçlar' },
+  { id: 'fab', lbl: 'Hızlı Ekle' }, { id: 'budgets', lbl: 'Bütçe' },
+  { id: 'txns', lbl: 'İşlemler' }, { id: 'reports', lbl: 'Raporlar' },
+  { id: 'settings', lbl: 'Ayarlar' }];
+
+
+  return (
+    <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', padding: 32 }}>
+      {/* Sidebar */}
+      <div style={{ width: 190, display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4, flexShrink: 0 }}>
+        {/* Logo */}
+        <div style={{ marginBottom: 18, paddingLeft: 4 }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 20, color: T.primary, letterSpacing: '-.02em' }}>Para<span style={{ color: T.success }}>Cep</span></div>
+          <div style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 500, marginTop: 1 }}>Mobil Prototip v1.2</div>
+        </div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '.08em', padding: '0 12px', marginBottom: 2 }}>Ekranlar</div>
+        {navItems.map((n) =>
+        <button key={n.id} className={`sidebar-btn${screen === n.id || n.id === 'fab' && modal ? ' active' : ''}`} onClick={() => navigate(n.id)}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary, opacity: screen === n.id || n.id === 'fab' && modal ? 1 : 0, flexShrink: 0 }} />
+            {n.lbl}
+          </button>
+        )}
+        <div style={{ marginTop: 16, padding: '11px 12px', background: theme === 'dark' ? '#1E293B' : T.primaryLight, borderRadius: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.primary, marginBottom: 3 }}>390 × 844 · iOS</div>
+          <div style={{ fontSize: 10, color: '#6B7280', lineHeight: 1.5 }}>Tab bar veya sol menü<br />ile gezinin</div>
+        </div>
+      </div>
+
+      {/* Phone */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '.07em' }}>{screenTitles[screen] || 'İşlem Ekle'}</div>
+        <PhoneShell T={T}>
+          {screen !== 'settings' &&
+          <AppHeader title={screenTitles[screen] || 'ParaCep'} T={T} onSettings={() => navigate('settings')} showNotif={screen === 'home'} />
+          }
+          {screen === 'settings' &&
+          <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>Ayarlar</span>
+            </div>
+          }
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+            {renderScreen()}
+            {modal && <QuickAddModal onClose={() => setModal(false)} T={T} />}
+          </div>
+          {/* Custom tab bar with budgets */}
+          <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0 }}>
+            {[
+            { id: 'home', lbl: 'Ana Sayfa', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg> },
+            { id: 'debts', lbl: 'Borçlar', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg> },
+            { id: 'fab', lbl: '', icon: null },
+            { id: 'txns', lbl: 'İşlemler', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /></svg> },
+            { id: 'reports', lbl: 'Raporlar', icon: (c) => <svg width="20" height="20" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg> }].
+            map((t) => t.id === 'fab' ?
+            <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                <button onClick={() => navigate('fab')} style={{ width: 52, height: 52, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: -18 }}>
+                  <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                </button>
+              </div> :
+
+            <button key={t.id} onClick={() => navigate(t.id)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0, minHeight: 44 }}>
+                {t.icon(screen === t.id ? T.primary : T.textMut)}
+                <span style={{ fontSize: 9, fontWeight: 600, color: screen === t.id ? T.primary : T.textMut }}>{t.lbl}</span>
+              </button>
+            )}
+          </div>
+        </PhoneShell>
+        <div style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center' }}>Tweaks ile tema & grafik stilini değiştirin</div>
+      </div>
+    </div>);
+
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { scope: '/ParaCep/' })
+      .catch(() => {/* local file:// veya eski tarayıcı — sessizce geç */});
+  });
+}
+</script>
+</body>
+</html>
