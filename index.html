@@ -28,6 +28,20 @@
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyA25Ea8j5i8kXK8IKRmyh5_Ej2jkXwP_L8",
+  authDomain: "paracep-c7c96.firebaseapp.com",
+  projectId: "paracep-c7c96",
+  storageBucket: "paracep-c7c96.firebasestorage.app",
+  messagingSenderId: "968735943986",
+  appId: "1:968735943986:web:3b7ab51343c2191b357b2b"
+});
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#E8ECF0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif;overflow:hidden}
@@ -130,7 +144,7 @@ function makeTheme(mode, accentKey) {
 }
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
-const DATA = {
+const SEED_DATA = {
   balance: 8240.50,
   income: 12000,
   expense: 3759.50,
@@ -179,9 +193,85 @@ const DATA = {
 
 };
 
+// Mutable working copy — updated from Firestore in real-time
+let DATA = { ...SEED_DATA };
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const fmt = (v) => `₺${Math.abs(v).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
 const fmtK = (v) => v >= 1000 ? `₺${(v / 1000).toLocaleString('tr-TR', { minimumFractionDigits: 0 })}B` : fmt(v);
+
+const CAT_COLORS = {
+  'Mutfak': '#F59E0B', 'Ulaşım': '#8B5CF6', 'Sağlık': '#10B981',
+  'Giyim': '#EC4899', 'Ev Giderleri': '#3B82F6', 'Gelir': '#059669',
+  'Abonelik': '#EF4444', 'Birikim': '#6366F1', 'Diğer': '#9CA3AF'
+};
+
+function computeAppData(raw) {
+  const txns = raw.transactions || [];
+  const income  = txns.filter(t => t.amount > 0).reduce((s,t) => s + t.amount, 0);
+  const expense = txns.filter(t => t.amount < 0).reduce((s,t) => s + Math.abs(t.amount), 0);
+  const balance = income - expense;
+
+  // Last 6 months
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const mTxns = txns.filter(t => {
+      const [dd, mm, yy] = t.date.split('.');
+      const td = new Date(+yy, +mm - 1, +dd);
+      return td >= d && td < next;
+    });
+    return {
+      label: d.toLocaleDateString('tr-TR', { month: 'short' }),
+      income:  mTxns.filter(t => t.amount > 0).reduce((s,t) => s + t.amount, 0),
+      expense: mTxns.filter(t => t.amount < 0).reduce((s,t) => s + Math.abs(t.amount), 0),
+    };
+  });
+
+  // Category breakdown (all-time expenses)
+  const catMap = {};
+  txns.filter(t => t.amount < 0).forEach(t => {
+    const key = t.cat || 'Diğer';
+    if (!catMap[key]) catMap[key] = { amt: 0, color: t.catColor || CAT_COLORS[key] || '#9CA3AF' };
+    catMap[key].amt += Math.abs(t.amount);
+  });
+  const totalExp = Object.values(catMap).reduce((s, v) => s + v.amt, 0);
+  const cats = Object.entries(catMap)
+    .map(([name, { amt, color }]) => ({ name, amt, pct: totalExp ? Math.round(amt / totalExp * 100) : 0, color }))
+    .sort((a, b) => b.amt - a.amt).slice(0, 5);
+
+  return {
+    ...SEED_DATA,
+    ...raw,
+    balance, income, expense,
+    monthLabels: months.map(m => m.label),
+    monthIncomes: months.map(m => m.income),
+    monthExpenses: months.map(m => m.expense),
+    cats: cats.length ? cats : SEED_DATA.cats,
+  };
+}
+
+async function seedUserData(uid, name) {
+  const db = firebase.firestore();
+  const ts = (d) => firebase.firestore.Timestamp.fromDate(new Date(d));
+  const batch = db.batch();
+  batch.set(db.doc(`users/${uid}/meta/profile`), { name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  const txns = [
+    { label: 'Maaş', cat: 'Gelir', catColor: '#059669', amount: 10000, date: '01.04.2026', createdAt: ts('2026-04-01') },
+    { label: 'Freelance Gelir', cat: 'Gelir', catColor: '#059669', amount: 2000, date: '10.04.2026', createdAt: ts('2026-04-10') },
+    { label: 'Market Alışverişi', cat: 'Mutfak', catColor: '#F59E0B', amount: -342.80, date: '21.04.2026', createdAt: ts('2026-04-21') },
+    { label: 'Akaryakıt', cat: 'Ulaşım', catColor: '#8B5CF6', amount: -650, date: '20.04.2026', createdAt: ts('2026-04-20') },
+    { label: 'Netflix', cat: 'Abonelik', catColor: '#EF4444', amount: -59.90, date: '18.04.2026', createdAt: ts('2026-04-18') },
+    { label: 'Elektrik Faturası', cat: 'Ev Giderleri', catColor: '#3B82F6', amount: -265, date: '15.04.2026', createdAt: ts('2026-04-15') },
+  ];
+  txns.forEach(t => batch.set(db.collection(`users/${uid}/transactions`).doc(), t));
+  SEED_DATA.cards.forEach(c => batch.set(db.collection(`users/${uid}/cards`).doc(), c));
+  SEED_DATA.loans.forEach(l => batch.set(db.collection(`users/${uid}/loans`).doc(), l));
+  SEED_DATA.budgets.forEach(b => batch.set(db.collection(`users/${uid}/budgets`).doc(), b));
+  SEED_DATA.upcoming.forEach(u => batch.set(db.collection(`users/${uid}/upcoming`).doc(), u));
+  await batch.commit();
+}
 
 // ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
 function Card({ children, style = {}, T }) {
@@ -715,35 +805,57 @@ const ACCENT_META = [
   { key: 'teal',   label: 'Turkuaz', color: '#0D9488' },
 ];
 
-function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent }) {
+function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, user, onLogout, onExport, onDeleteData }) {
+  const [editName, setEditName] = React.useState(false);
+  const [nameVal, setNameVal] = React.useState(user?.displayName || '');
+  const [savingName, setSavingName] = React.useState(false);
+
+  const saveName = async () => {
+    if (!nameVal.trim()) return;
+    setSavingName(true);
+    await user.updateProfile({ displayName: nameVal.trim() });
+    await firebase.firestore().doc(`users/${user.uid}/meta/profile`).set({ name: nameVal.trim() }, { merge: true });
+    setSavingName(false);
+    setEditName(false);
+  };
+
   const sections = [
   { title: 'Hesap', items: [
-    { icon: '👤', label: 'Profil Bilgileri', sub: 'Adı güncelle' },
-    { icon: '🔒', label: 'Güvenlik', sub: 'PIN, biyometrik' }]
+    { icon: '👤', label: 'Profil Bilgileri', sub: user?.displayName || user?.email, onTap: () => setEditName(v => !v) },
+    { icon: '🚪', label: 'Çıkış Yap', sub: user?.email, onTap: onLogout, danger: false, accent: true }]
   },
   { title: 'Tercihler', items: [
-    { icon: isDark ? '☀️' : '🌙', label: isDark ? 'Açık Mod' : 'Koyu Mod', sub: 'Tema değiştir', onTap: onToggleDark },
+    { icon: isDark ? '☀️' : '🌙', label: isDark ? 'Açık Moda Geç' : 'Koyu Moda Geç', sub: 'Tema değiştir', onTap: onToggleDark },
     { icon: '🌍', label: 'Dil', sub: 'Türkçe' },
     { icon: '💱', label: 'Para Birimi', sub: 'TL (₺)' }]
   },
   { title: 'Veri', items: [
-    { icon: '💾', label: 'Yedekleme', sub: 'Son yedek: bugün' },
-    { icon: '📤', label: 'Dışa Aktar', sub: 'CSV, JSON' },
-    { icon: '🗑️', label: 'Tüm Veriyi Sil', sub: 'Geri alınamaz', danger: true }]
+    { icon: '📤', label: 'Veriyi Dışa Aktar', sub: 'JSON formatında indir', onTap: onExport },
+    { icon: '🗑️', label: 'Tüm Veriyi Sil', sub: 'Geri alınamaz', danger: true, onTap: onDeleteData }]
   },
   { title: 'Hakkında', items: [
     { icon: '📋', label: 'ParaCep', sub: 'Sürüm 1.2.0' },
-    { icon: '❓', label: 'Yardım & SSS', sub: '' }]
+    { icon: '❓', label: 'Yardım & SSS', sub: 'paracep@destek.com' }]
   }];
 
   return <Scroller>
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.surface, borderRadius: 14, padding: '16px 14px', border: `1px solid ${T.border}` }}>
       <div style={{ width: 52, height: 52, borderRadius: '50%', background: T.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👤</div>
-      <div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Kullanıcı Adı</div>
-        <div style={{ fontSize: 12, color: T.textSub }}>kullanici@email.com</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{user?.displayName || 'Kullanıcı'}</div>
+        <div style={{ fontSize: 12, color: T.textSub }}>{user?.email}</div>
       </div>
     </div>
+    {editName && <Card T={T} style={{ padding: '14px 14px' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: T.textSub, marginBottom: 8 }}>Ad Soyad Güncelle</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input value={nameVal} onChange={e => setNameVal(e.target.value)} placeholder="Ad Soyad"
+          style={{ flex: 1, height: 40, border: `1.5px solid ${T.primary}`, borderRadius: 8, padding: '0 12px', fontSize: 13, outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+        <button onClick={saveName} disabled={savingName} style={{ height: 40, padding: '0 16px', background: T.primary, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          {savingName ? '…' : 'Kaydet'}
+        </button>
+      </div>
+    </Card>}
 
     {/* Accent colour picker */}
     <div>
@@ -770,13 +882,13 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent }) {
         <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>{sec.title}</div>
         <Card T={T} style={{ padding: '0 4px' }}>
           {sec.items.map((item, ii) =>
-        <button key={ii} onClick={item.onTap} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 12px', borderBottom: ii < sec.items.length - 1 ? `1px solid ${T.border}` : 'none', background: 'none', border: 'none', cursor: item.onTap || item.danger ? 'pointer' : 'default', borderRadius: 0, textAlign: 'left' }}>
+        <button key={ii} onClick={item.onTap} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 12px', borderBottom: ii < sec.items.length - 1 ? `1px solid ${T.border}` : 'none', background: 'none', border: 'none', cursor: item.onTap ? 'pointer' : 'default', borderRadius: 0, textAlign: 'left' }}>
               <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{item.icon}</span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: item.danger ? T.danger : T.text }}>{item.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: item.danger ? T.danger : item.accent ? T.primary : T.text }}>{item.label}</div>
                 {item.sub && <div style={{ fontSize: 11, color: T.textSub, marginTop: 1 }}>{item.sub}</div>}
               </div>
-              {!item.danger && <svg width="16" height="16" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>}
+              {!item.danger && item.onTap && <svg width="16" height="16" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>}
             </button>
         )}
         </Card>
@@ -785,44 +897,173 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent }) {
   </Scroller>;
 }
 
+// ─── AUTH SCREENS ─────────────────────────────────────────────────────────────
+function AuthInput({ label, value, onChange, type = 'text', placeholder }) {
+  const [focus, setFocus] = React.useState(false);
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
+      <input value={value} onChange={e => onChange(e.target.value)} type={type} placeholder={placeholder}
+        onKeyDown={e => e.key === 'Enter' && e.target.closest('form')?.querySelector('[data-submit]')?.click()}
+        style={{ width: '100%', height: 46, border: `1.5px solid ${focus ? '#7C3AED' : '#E5E7EB'}`, borderRadius: 10, padding: '0 14px', fontSize: 14, outline: 'none', fontFamily: "'DM Sans',sans-serif", color: '#111827', background: '#fff', transition: 'border-color .15s' }}
+        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} />
+    </div>
+  );
+}
+
+const AUTH_ERRORS = {
+  'auth/user-not-found': 'Bu e-posta ile kayıtlı hesap bulunamadı',
+  'auth/wrong-password': 'Şifre yanlış',
+  'auth/invalid-credential': 'E-posta veya şifre hatalı',
+  'auth/invalid-email': 'Geçersiz e-posta adresi',
+  'auth/email-already-in-use': 'Bu e-posta zaten kullanımda',
+  'auth/weak-password': 'Şifre en az 6 karakter olmalı',
+  'auth/too-many-requests': 'Çok fazla deneme. Lütfen bekleyin',
+};
+
+function LoginScreen({ onGoRegister }) {
+  const [email, setEmail] = React.useState('');
+  const [pw, setPw] = React.useState('');
+  const [err, setErr] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !pw) { setErr('E-posta ve şifre gerekli'); return; }
+    setLoading(true); setErr('');
+    try { await firebase.auth().signInWithEmailAndPassword(email, pw); }
+    catch (e) { setErr(AUTH_ERRORS[e.code] || 'Giriş başarısız, tekrar deneyin'); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#F5F3FF', padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ marginBottom: 32, textAlign: 'center' }}>
+        <div style={{ fontWeight: 800, fontSize: 36, color: '#7C3AED', letterSpacing: '-.03em' }}>Para<span style={{ color: '#059669' }}>Cep</span></div>
+        <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 4 }}>Kişisel finans takibi</div>
+      </div>
+      <form onSubmit={e => { e.preventDefault(); handleLogin(); }} style={{ width: '100%', maxWidth: 360, background: '#fff', borderRadius: 20, padding: 24, boxShadow: '0 4px 32px rgba(124,58,237,.13)' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 18 }}>Giriş Yap</div>
+        {err && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#DC2626', marginBottom: 14 }}>{err}</div>}
+        <AuthInput label="E-posta" value={email} onChange={setEmail} type="email" placeholder="ornek@email.com" />
+        <AuthInput label="Şifre" value={pw} onChange={setPw} type="password" placeholder="••••••••" />
+        <button data-submit type="submit" disabled={loading} style={{ width: '100%', height: 48, background: loading ? '#A78BFA' : '#7C3AED', color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: loading ? 'default' : 'pointer', marginTop: 6 }}>
+          {loading ? 'Giriş yapılıyor…' : 'Giriş Yap'}
+        </button>
+        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: '#6B7280' }}>
+          Hesabın yok mu?{' '}
+          <button type="button" onClick={onGoRegister} style={{ background: 'none', border: 'none', color: '#7C3AED', fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>Kayıt Ol →</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function RegisterScreen({ onGoLogin }) {
+  const [name, setName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [pw, setPw] = React.useState('');
+  const [err, setErr] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleRegister = async () => {
+    if (!name.trim() || !email || !pw) { setErr('Tüm alanlar zorunlu'); return; }
+    setLoading(true); setErr('');
+    try {
+      const cred = await firebase.auth().createUserWithEmailAndPassword(email, pw);
+      await cred.user.updateProfile({ displayName: name.trim() });
+      await seedUserData(cred.user.uid, name.trim());
+    } catch (e) { setErr(AUTH_ERRORS[e.code] || 'Kayıt başarısız, tekrar deneyin'); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#F5F3FF', padding: 24, fontFamily: "'DM Sans',sans-serif", overflowY: 'auto' }}>
+      <div style={{ marginBottom: 24, textAlign: 'center' }}>
+        <div style={{ fontWeight: 800, fontSize: 36, color: '#7C3AED', letterSpacing: '-.03em' }}>Para<span style={{ color: '#059669' }}>Cep</span></div>
+      </div>
+      <form onSubmit={e => { e.preventDefault(); handleRegister(); }} style={{ width: '100%', maxWidth: 360, background: '#fff', borderRadius: 20, padding: 24, boxShadow: '0 4px 32px rgba(124,58,237,.13)' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 18 }}>Hesap Oluştur</div>
+        {err && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#DC2626', marginBottom: 14 }}>{err}</div>}
+        <AuthInput label="Ad Soyad" value={name} onChange={setName} placeholder="Adınız" />
+        <AuthInput label="E-posta" value={email} onChange={setEmail} type="email" placeholder="ornek@email.com" />
+        <AuthInput label="Şifre" value={pw} onChange={setPw} type="password" placeholder="En az 6 karakter" />
+        <button data-submit type="submit" disabled={loading} style={{ width: '100%', height: 48, background: loading ? '#A78BFA' : '#7C3AED', color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, cursor: loading ? 'default' : 'pointer', marginTop: 6 }}>
+          {loading ? 'Hesap oluşturuluyor…' : 'Kayıt Ol'}
+        </button>
+        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: '#6B7280' }}>
+          Hesabın var mı?{' '}
+          <button type="button" onClick={onGoLogin} style={{ background: 'none', border: 'none', color: '#7C3AED', fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 13 }}>Giriş Yap →</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ─── QUICK ADD MODAL ──────────────────────────────────────────────────────────
-function QuickAddModal({ onClose, T }) {
+function QuickAddModal({ onClose, onSave, T }) {
   const [type, setType] = React.useState('expense');
   const [amount, setAmount] = React.useState('');
+  const [label, setLabel] = React.useState('');
   const [cat, setCat] = React.useState('Mutfak');
-  const cats = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Gelir', 'Birikim', 'Diğer'];
+  const [saving, setSaving] = React.useState(false);
+  const CATS = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Gelir', 'Abonelik', 'Birikim', 'Diğer'];
+
+  const today = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.');
+
+  const handleSave = async () => {
+    const amt = parseFloat(amount.replace(',', '.'));
+    if (!amt || amt <= 0) return;
+    setSaving(true);
+    await onSave({
+      label: label.trim() || cat,
+      cat: type === 'income' ? 'Gelir' : cat,
+      catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || '#9CA3AF'),
+      amount: type === 'income' ? amt : -amt,
+      date: today,
+    });
+    setSaving(false);
+    onClose();
+  };
+
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
-      <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)' }}>
+      <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, textAlign: 'center', padding: '14px 0 12px', borderBottom: `1px solid ${T.border}` }}>İşlem Ekle</div>
         <div style={{ marginTop: 14 }}>
-          <SegControl tabs={[['income', 'Gelir'], ['expense', 'Gider']]} active={type} onChange={setType} T={T} />
+          <SegControl tabs={[['expense', 'Gider'], ['income', 'Gelir']]} active={type} onChange={v => { setType(v); if (v === 'income') setCat('Gelir'); else setCat('Mutfak'); }} T={T} />
         </div>
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tutar</div>
           <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontFamily: "'DM Mono',monospace", fontSize: 18, color: T.textSub }}>₺</span>
-            <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" type="number" style={{ width: '100%', height: 52, border: `1.5px solid ${T.primary}`, borderRadius: 10, padding: '0 14px 0 32px', fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 500, outline: 'none', boxShadow: `0 0 0 3px ${T.primaryLight}`, background: T.surface, color: T.text }} />
+            <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="0,00" type="number" inputMode="decimal"
+              style={{ width: '100%', height: 52, border: `1.5px solid ${T.primary}`, borderRadius: 10, padding: '0 14px 0 32px', fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 500, outline: 'none', boxShadow: `0 0 0 3px ${T.primaryLight}`, background: T.surface, color: T.text }} />
           </div>
         </div>
         <div style={{ marginTop: 13 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Açıklama (isteğe bağlı)</div>
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder={cat}
+            style={{ width: '100%', height: 42, border: `1px solid ${T.border}`, borderRadius: 10, padding: '0 14px', fontSize: 13, outline: 'none', background: T.surface2, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+        </div>
+        {type === 'expense' && <div style={{ marginTop: 13 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {cats.map((c) =>
-            <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} T={T} />
-            )}
+            {CATS.filter(c => c !== 'Gelir').map(c => <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} T={T} />)}
           </div>
-        </div>
+        </div>}
         <div style={{ marginTop: 13 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tarih</div>
-          <div style={{ height: 42, border: `1px solid ${T.border}`, borderRadius: 10, background: T.surface2, display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 13, color: T.textSub }}>22.04.2026 — Bugün</div>
+          <div style={{ height: 42, border: `1px solid ${T.border}`, borderRadius: 10, background: T.surface2, display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 13, color: T.textSub }}>{today} — Bugün</div>
         </div>
-        <button style={{ width: '100%', height: 52, background: T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: 'pointer', boxShadow: T.fab }}>Kaydet</button>
+        <button onClick={handleSave} disabled={saving || !amount}
+          style={{ width: '100%', height: 52, background: saving || !amount ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: saving || !amount ? 'default' : 'pointer', boxShadow: saving || !amount ? 'none' : T.fab }}>
+          {saving ? 'Kaydediliyor…' : 'Kaydet'}
+        </button>
       </div>
-    </div>);
-
+    </div>
+  );
 }
 
 // ─── PHONE SHELL ──────────────────────────────────────────────────────────────
@@ -837,28 +1078,69 @@ function PhoneShell({ children, T }) {
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App() {
-  const [screen, setScreen] = React.useState(() => {
-    const p = new URLSearchParams(window.location.search).get('screen');
-    return p || localStorage.getItem('pc_screen') || 'home';
-  });
+  // ── Auth & data state ──
+  const [authReady, setAuthReady] = React.useState(false);
+  const [user, setUser] = React.useState(null);
+  const [authView, setAuthView] = React.useState('login');
+  const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+
+  // ── UI state ──
+  const [screen, setScreen] = React.useState(() => new URLSearchParams(window.location.search).get('screen') || localStorage.getItem('pc_screen') || 'home');
   const [modal, setModal] = React.useState(false);
   const [theme, setTheme] = React.useState(() => localStorage.getItem('pc_theme') || 'light');
   const [accent, setAccent] = React.useState(() => localStorage.getItem('pc_accent') || 'purple');
   const [chartStyle, setChartStyle] = React.useState('bar');
   const [isMobile, setIsMobile] = React.useState(() => window.matchMedia('(max-width: 600px)').matches);
 
+  const db = firebase.firestore();
+  const auth = firebase.auth();
+
+  // Mobile detection
   React.useEffect(() => {
     const mq = window.matchMedia('(max-width: 600px)');
-    const h = (e) => setIsMobile(e.matches);
+    const h = e => setIsMobile(e.matches);
     mq.addEventListener('change', h);
     return () => mq.removeEventListener('change', h);
   }, []);
 
+  // Tweaks panel
   React.useEffect(() => {
-    window.__setTheme = (v) => { setTheme(v); localStorage.setItem('pc_theme', v); };
-    window.__setAccent = (v) => { setAccent(v); localStorage.setItem('pc_accent', v); };
-    window.__setChart = (v) => setChartStyle(v);
+    window.__setTheme = v => { setTheme(v); localStorage.setItem('pc_theme', v); };
+    window.__setAccent = v => { setAccent(v); localStorage.setItem('pc_accent', v); };
+    window.__setChart = v => setChartStyle(v);
   }, []);
+
+  // Auth state listener
+  React.useEffect(() => {
+    return auth.onAuthStateChanged(u => {
+      setUser(u);
+      setAuthReady(true);
+      if (!u) { DATA = { ...SEED_DATA }; forceUpdate(); }
+    });
+  }, []);
+
+  // Firestore real-time listeners
+  React.useEffect(() => {
+    if (!user) return;
+    const uid = user.uid;
+    const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [] };
+    const refresh = (key, val) => { raw[key] = val; DATA = computeAppData(raw); forceUpdate(); };
+    const unsubs = [
+      db.collection(`users/${uid}/transactions`).orderBy('createdAt', 'desc').onSnapshot(s => refresh('transactions', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/cards`).onSnapshot(s => refresh('cards', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/loans`).onSnapshot(s => refresh('loans', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/budgets`).onSnapshot(s => refresh('budgets', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/upcoming`).onSnapshot(s => refresh('upcoming', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+    ];
+    // Load saved theme/accent
+    db.doc(`users/${uid}/meta/profile`).get().then(doc => {
+      if (!doc.exists) return;
+      const p = doc.data();
+      if (p.theme) { setTheme(p.theme); localStorage.setItem('pc_theme', p.theme); }
+      if (p.accent) { setAccent(p.accent); localStorage.setItem('pc_accent', p.accent); }
+    });
+    return () => unsubs.forEach(u => u());
+  }, [user]);
 
   const T = makeTheme(theme, accent);
 
@@ -869,10 +1151,35 @@ function App() {
     else document.body.style.background = '';
   }, [isMobile, T.bg, T.primary]);
 
-  const navigate = (id) => {
+  // ── Actions ──
+  const navigate = id => {
     if (id === 'fab') { setModal(true); return; }
-    setScreen(id);
-    localStorage.setItem('pc_screen', id);
+    setScreen(id); localStorage.setItem('pc_screen', id);
+  };
+
+  const saveTransaction = async txData => {
+    if (!user) return;
+    await db.collection(`users/${user.uid}/transactions`).add({ ...txData, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  };
+
+  const handleLogout = async () => {
+    await auth.signOut();
+    setScreen('home'); localStorage.removeItem('pc_screen');
+  };
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify({ transactions: DATA.transactions, cards: DATA.cards, loans: DATA.loans, budgets: DATA.budgets }, null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'paracep-verilerim.json' });
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  const handleDeleteData = async () => {
+    if (!user || !window.confirm('Tüm işlem verileriniz silinecek. Bu işlem geri alınamaz!')) return;
+    const uid = user.uid;
+    for (const col of ['transactions', 'cards', 'loans', 'budgets', 'upcoming']) {
+      const snap = await db.collection(`users/${uid}/${col}`).get();
+      const batch = db.batch(); snap.docs.forEach(d => batch.delete(d.ref)); await batch.commit();
+    }
   };
 
   const screenTitles = { home: 'Ana Sayfa', debts: 'Borçlar', txns: 'İşlemler', reports: 'Raporlar', budgets: 'Bütçe & Birikimler', settings: 'Ayarlar' };
@@ -884,9 +1191,12 @@ function App() {
       case 'txns':     return <TransactionsScreen T={T} />;
       case 'reports':  return <ReportsScreen T={T} chartStyle={chartStyle} />;
       case 'budgets':  return <BudgetsScreen T={T} />;
-      case 'settings': return <SettingsScreen T={T} isDark={theme === 'dark'}
-        onToggleDark={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); localStorage.setItem('pc_theme', n); }}
-        accent={accent} onAccent={(v) => { setAccent(v); localStorage.setItem('pc_accent', v); window.__setAccent && window.__setAccent(v); }} />;
+      case 'settings': return <SettingsScreen T={T}
+        isDark={theme === 'dark'}
+        onToggleDark={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); localStorage.setItem('pc_theme', n); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ theme: n }, { merge: true }); }}
+        accent={accent}
+        onAccent={v => { setAccent(v); localStorage.setItem('pc_accent', v); window.__setAccent && window.__setAccent(v); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ accent: v }, { merge: true }); }}
+        user={user} onLogout={handleLogout} onExport={handleExport} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
   };
@@ -898,15 +1208,15 @@ function App() {
     : <AppHeader title={screenTitles[screen] || 'ParaCep'} T={T} onSettings={() => navigate('settings')} showNotif={screen === 'home'} />;
 
   const TAB_ITEMS = [
-    { id: 'home',   lbl: 'Ana Sayfa', icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-    { id: 'debts',  lbl: 'Borçlar',   icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
-    { id: 'fab',    lbl: '',          icon: null },
-    { id: 'txns',   lbl: 'İşlemler',  icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg> },
-    { id: 'reports',lbl: 'Raporlar',  icon: (c) => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+    { id: 'home',    lbl: 'Ana Sayfa', icon: c => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+    { id: 'debts',   lbl: 'Borçlar',   icon: c => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> },
+    { id: 'fab',     lbl: '',          icon: null },
+    { id: 'txns',    lbl: 'İşlemler',  icon: c => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg> },
+    { id: 'reports', lbl: 'Raporlar',  icon: c => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
   ];
 
-  const renderTabBar = (iconSize = 22, lblSize = 10, fabOffset = -18) =>
-    TAB_ITEMS.map((t) => t.id === 'fab'
+  const renderTabBar = (lblSize = 10, fabOffset = -18) =>
+    TAB_ITEMS.map(t => t.id === 'fab'
       ? <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
           <button onClick={() => navigate('fab')} style={{ width: 52, height: 52, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: fabOffset }}>
             <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -918,50 +1228,58 @@ function App() {
         </button>
     );
 
-  // ── MOBİL LAYOUT (gerçek cihaz tam ekran) ─────────────────────────────────
-  if (isMobile) {
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: T.bg, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", overflow: 'hidden' }}>
-        {/* Status bar safe area — header rengiyle doldur */}
-        <div style={{ height: 'env(safe-area-inset-top)', background: T.surface, flexShrink: 0 }} />
-        {renderHeader()}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
-          {renderScreen()}
-          {modal && <QuickAddModal onClose={() => setModal(false)} T={T} />}
-        </div>
-        <div style={{ background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
-          {renderTabBar()}
-        </div>
-      </div>
-    );
+  // ── Auth loading splash ──
+  if (!authReady) return (
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#F5F3FF', fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontWeight: 800, fontSize: 36, color: '#7C3AED', letterSpacing: '-.03em' }}>Para<span style={{ color: '#059669' }}>Cep</span></div>
+      <div style={{ marginTop: 16, width: 32, height: 32, border: '3px solid #E9D5FF', borderTop: '3px solid #7C3AED', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+
+  // ── Auth screens ──
+  if (!user) {
+    if (authView === 'register') return <RegisterScreen onGoLogin={() => setAuthView('login')} />;
+    return <LoginScreen onGoRegister={() => setAuthView('register')} />;
   }
 
-  // ── MASAÜSTÜ PROTOTIP LAYOUT ───────────────────────────────────────────────
+  // ── Mobile full-screen layout ──
+  if (isMobile) return (
+    <div style={{ position: 'fixed', inset: 0, background: T.bg, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", overflow: 'hidden' }}>
+      <div style={{ height: 'env(safe-area-inset-top)', background: T.surface, flexShrink: 0 }} />
+      {renderHeader()}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+        {renderScreen()}
+        {modal && <QuickAddModal onClose={() => setModal(false)} onSave={saveTransaction} T={T} />}
+      </div>
+      <div style={{ background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
+        {renderTabBar()}
+      </div>
+    </div>
+  );
+
+  // ── Desktop prototype layout ──
   const navItems = [
     { id: 'home', lbl: 'Ana Sayfa' }, { id: 'debts', lbl: 'Borçlar' },
     { id: 'fab', lbl: 'Hızlı Ekle' }, { id: 'budgets', lbl: 'Bütçe' },
     { id: 'txns', lbl: 'İşlemler' }, { id: 'reports', lbl: 'Raporlar' },
     { id: 'settings', lbl: 'Ayarlar' },
   ];
-
   return (
     <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', padding: 32 }}>
       <div style={{ width: 190, display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4, flexShrink: 0 }}>
         <div style={{ marginBottom: 18, paddingLeft: 4 }}>
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 20, color: T.primary, letterSpacing: '-.02em' }}>Para<span style={{ color: T.success }}>Cep</span></div>
-          <div style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 500, marginTop: 1 }}>Mobil Prototip v1.2</div>
+          <div style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 500, marginTop: 1 }}>v1.2 · {user.displayName || user.email}</div>
         </div>
         <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '.08em', padding: '0 12px', marginBottom: 2 }}>Ekranlar</div>
-        {navItems.map((n) =>
+        {navItems.map(n =>
           <button key={n.id} className={`sidebar-btn${screen === n.id || (n.id === 'fab' && modal) ? ' active' : ''}`} onClick={() => navigate(n.id)}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.primary, opacity: screen === n.id || (n.id === 'fab' && modal) ? 1 : 0, flexShrink: 0 }} />
             {n.lbl}
           </button>
         )}
-        <div style={{ marginTop: 16, padding: '11px 12px', background: theme === 'dark' ? '#1E293B' : T.primaryLight, borderRadius: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.primary, marginBottom: 3 }}>390 × 844 · iOS</div>
-          <div style={{ fontSize: 10, color: '#6B7280', lineHeight: 1.5 }}>Tab bar veya sol menü<br />ile gezinin</div>
-        </div>
+        <button onClick={handleLogout} style={{ marginTop: 12, width: '100%', padding: '9px 12px', borderRadius: 10, background: 'none', border: `1px solid ${T.border}`, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: T.danger, fontFamily: "'DM Sans',sans-serif", textAlign: 'left' }}>🚪 Çıkış Yap</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '.07em' }}>{screenTitles[screen] || 'İşlem Ekle'}</div>
@@ -969,13 +1287,12 @@ function App() {
           {renderHeader()}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
             {renderScreen()}
-            {modal && <QuickAddModal onClose={() => setModal(false)} T={T} />}
+            {modal && <QuickAddModal onClose={() => setModal(false)} onSave={saveTransaction} T={T} />}
           </div>
           <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0 }}>
-            {renderTabBar(20, 9, -18)}
+            {renderTabBar(9, -18)}
           </div>
         </PhoneShell>
-        <div style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center' }}>Tweaks ile tema & grafik stilini değiştirin</div>
       </div>
     </div>
   );
