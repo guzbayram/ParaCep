@@ -922,6 +922,8 @@ function App() {
   if (isMobile) {
     return (
       <div style={{ position: 'fixed', inset: 0, background: T.bg, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", overflow: 'hidden' }}>
+        {/* Status bar safe area — header rengiyle doldur */}
+        <div style={{ height: 'env(safe-area-inset-top)', background: T.surface, flexShrink: 0 }} />
         {renderHeader()}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
           {renderScreen()}
