@@ -620,7 +620,10 @@ function DebtsScreen({ T }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{l.name}</div>
                   <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>{l.bank} · {rc}/{inst} taksit</div>
-                  {dueStr ? <div style={{ fontSize: 11, color: T.primary, marginTop: 1, fontWeight: 600 }}>{dueStr}</div> : null}
+                  {dueStr
+                    ? <div style={{ fontSize: 11, color: T.primary, marginTop: 1, fontWeight: 600 }}>📅 {dueStr}</div>
+                    : <button onClick={e => { e.stopPropagation(); }} style={{ fontSize: 11, color: T.warning, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginTop: 1, fontWeight: 600, fontFamily: "'DM Sans',sans-serif" }}>⚠️ Ödeme günü girilmemiş — ✏️ düzenle</button>
+                  }
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <div style={{ textAlign: 'right' }}>
@@ -1061,7 +1064,19 @@ function AddLoanModal({ onClose, T, existing }) {
         <FField label="Toplam Taksit" value={instTotal} onChange={setInstTotal} type="number" inputMode="numeric" placeholder="60" T={T} />
         <FField label="Kalan Taksit" value={instLeft} onChange={setInstLeft} type="number" inputMode="numeric" placeholder="48" T={T} />
       </div>
-      <FField label="Ödeme Günü (1-31)" value={dueDay} onChange={setDueDay} type="number" inputMode="numeric" placeholder="1" T={T} />
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Aylık Taksit Ödeme Tarihi</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: T.textSub, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>Her ayın</span>
+            <input value={dueDay} onChange={e => setDueDay(e.target.value)} type="number" inputMode="numeric" min="1" max="31" placeholder="—"
+              style={{ width: '100%', height: 44, border: `1.5px solid ${dueDay ? T.primary : T.border}`, borderRadius: 10, padding: '0 44px 0 90px', fontSize: 16, fontWeight: 700, outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Mono',monospace", textAlign: 'center' }} />
+            <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: T.textSub, fontSize: 13, fontWeight: 500 }}>. günü</span>
+          </div>
+        </div>
+        {dueDay && <div style={{ fontSize: 12, color: T.primary, fontWeight: 600, marginTop: 6 }}>📅 Her ay {dueDay}. günü ödeme yapılacak</div>}
+        {!dueDay && <div style={{ fontSize: 11, color: T.textMut, marginTop: 5 }}>Boş bırakılabilir, sonradan düzenleyebilirsiniz</div>}
+      </div>
       {preview && <div style={{ fontSize: 12, color: T.primary, fontWeight: 600, marginBottom: 8, padding: '8px 12px', background: T.primaryLight, borderRadius: 8 }}>{preview}</div>}
       <SaveBtn onSave={handleSave} saving={saving} disabled={!name || !monthly || !instLeft} T={T} label={existing ? 'Güncelle' : 'Krediyi Ekle'} />
     </BottomSheet>
