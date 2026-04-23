@@ -567,14 +567,14 @@ function DebtsScreen({ T }) {
     </div>
     <Scroller>
       {tab === 'cards' ? <>
-        <div style={{ background: `linear-gradient(145deg,${T.primary},${T.primaryDark})`, borderRadius: 16, padding: '16px 18px', color: '#fff' }}>
+        <div style={{ background: `linear-gradient(145deg,${T.primary},${T.primaryDark})`, borderRadius: 16, padding: '18px 18px', color: '#fff', textAlign: 'center' }}>
           <div style={{ fontSize: T.fs(11), opacity: .65 }}>Toplam Kart Borcu</div>
-          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(26), fontWeight: 500, marginTop: 2 }}>{fmt(totalCard)}</div>
-          {DATA.cards.length > 0 && <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(28), fontWeight: 600, marginTop: 4, letterSpacing: '-.01em' }}>{fmt(totalCard)}</div>
+          {DATA.cards.length > 0 && <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
             {DATA.cards.map((c, i) => (
-              <div key={i} style={{ background: 'rgba(255,255,255,.15)', borderRadius: 10, padding: '8px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 64 }}>
-                <div style={{ fontSize: T.fs(10), opacity: .8, fontWeight: 600, textAlign: 'center' }}>{c.name.split(' ')[0]}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, textAlign: 'center' }}>{fmtK(c.balance)}</div>
+              <div key={i} style={{ background: 'rgba(255,255,255,.15)', borderRadius: 10, padding: '8px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 64 }}>
+                <div style={{ fontSize: T.fs(10), opacity: .8, fontWeight: 600 }}>{c.name.split(' ')[0]}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700 }}>{fmtK(c.balance)}</div>
               </div>
             ))}
           </div>}
@@ -613,14 +613,14 @@ function DebtsScreen({ T }) {
         })}
         <button onClick={() => setModal('card')} style={{ width: '100%', padding: '12px 0', borderRadius: 12, background: T.primaryLight, border: `1.5px dashed ${T.primary}`, color: T.primary, fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Yeni Kart Ekle</button>
       </> : <>
-        <div style={{ background: `linear-gradient(145deg,${T.primary},${T.primaryDark})`, borderRadius: 16, padding: '16px 18px', color: '#fff' }}>
+        <div style={{ background: `linear-gradient(145deg,${T.primary},${T.primaryDark})`, borderRadius: 16, padding: '18px 18px', color: '#fff', textAlign: 'center' }}>
           <div style={{ fontSize: T.fs(11), opacity: .65 }}>Toplam Kredi Borcu</div>
-          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(26), fontWeight: 500, marginTop: 2 }}>{fmtK(totalLoan)}</div>
-          {DATA.loans.length > 0 && <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(28), fontWeight: 600, marginTop: 4, letterSpacing: '-.01em' }}>{fmtK(totalLoan)}</div>
+          {DATA.loans.length > 0 && <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
             {DATA.loans.map((l, i) => (
-              <div key={i} style={{ background: 'rgba(255,255,255,.15)', borderRadius: 10, padding: '8px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 72 }}>
-                <div style={{ fontSize: T.fs(10), opacity: .8, fontWeight: 600, textAlign: 'center' }}>{l.name.split(' ')[0]}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, textAlign: 'center' }}>{fmtK(l.remaining !== undefined ? l.remaining : (l.monthly||0)*(l.remaining_count||0))}</div>
+              <div key={i} style={{ background: 'rgba(255,255,255,.15)', borderRadius: 10, padding: '8px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 72 }}>
+                <div style={{ fontSize: T.fs(10), opacity: .8, fontWeight: 600 }}>{l.name.split(' ')[0]}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700 }}>{fmtK(l.remaining !== undefined ? l.remaining : (l.monthly||0)*(l.remaining_count||0))}</div>
               </div>
             ))}
           </div>}
@@ -922,7 +922,150 @@ function ReportsScreen({ T, chartStyle }) {
         </div>
       )}
     </Card>
+
+    {/* ── BORÇ TAKİP GRAFİĞİ ─────────────────────────────────────────────── */}
+    <DebtTrackingCard T={T} />
+
   </Scroller>;
+}
+
+// ─── BORÇ TAKİP KARTI ─────────────────────────────────────────────────────────
+function DebtTrackingCard({ T }) {
+  const loans = DATA.loans || [];
+  const cards = DATA.cards || [];
+  const recurring = DATA.recurring || [];
+
+  // Aylık sabit gider/gelir net farkı
+  const monthlyFixedIncome  = recurring.filter(r => r.amount > 0 && r.frequency === 'monthly').reduce((s, r) => s + r.amount, 0);
+  const monthlyFixedExpense = recurring.filter(r => r.amount < 0 && r.frequency === 'monthly').reduce((s, r) => s + Math.abs(r.amount), 0);
+  const monthlyLoanPayment  = loans.reduce((s, l) => s + (l.monthly || 0), 0);
+  const netMonthly = monthlyFixedIncome - monthlyFixedExpense - monthlyLoanPayment;
+
+  // Önümüzdeki 12 ay borç projeksiyonu
+  const totalCardDebt = cards.reduce((s, c) => s + (c.balance || 0), 0);
+  const now = new Date();
+
+  const projection = Array.from({ length: 13 }, (_, m) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
+    const lbl = m === 0 ? 'Şimdi' : d.toLocaleDateString('tr-TR', { month: 'short', year: m > 11 ? '2-digit' : undefined });
+    const loanDebt = loans.reduce((sum, l) => {
+      const rem = Math.max(0, (l.remaining_count || 0) - m);
+      return sum + (l.monthly || 0) * rem;
+    }, 0);
+    return { lbl, loanDebt, cardDebt: totalCardDebt, total: loanDebt + totalCardDebt };
+  });
+
+  const maxDebt = Math.max(...projection.map(p => p.total), 1);
+  const W = 290, H = 100, n = projection.length;
+  const pts = projection.map((p, i) => ({ x: i * (W / (n - 1)), y: H - (p.total / maxDebt) * H }));
+  const loanPts = projection.map((p, i) => ({ x: i * (W / (n - 1)), y: H - (p.loanDebt / maxDebt) * H }));
+
+  const pathD  = 'M' + pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L');
+  const loanD  = 'M' + loanPts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L');
+  const areaD  = pathD + ` L${W},${H} L0,${H} Z`;
+
+  const totalNow   = projection[0].total;
+  const total12    = projection[12].total;
+  const reduction  = totalNow - total12;
+  const pctChange  = totalNow > 0 ? Math.round(reduction / totalNow * 100) : 0;
+
+  // Borç özgürlük ayı tahmini
+  const loanFreeMonth = projection.findIndex(p => p.loanDebt === 0);
+
+  if (totalNow === 0) return (
+    <Card T={T} style={{ padding: '14px 16px' }}>
+      <SectionHdr title="📊 Borç Takip" T={T} />
+      <div style={{ textAlign: 'center', padding: '24px 0', color: T.textSub }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>🎉</div>
+        <div style={{ fontSize: T.fs(13), fontWeight: 600 }}>Aktif borcunuz yok!</div>
+        <div style={{ fontSize: T.fs(11), marginTop: 4 }}>Kart veya kredi ekleyince takip başlar</div>
+      </div>
+    </Card>
+  );
+
+  return (
+    <Card T={T} style={{ padding: '14px 16px' }}>
+      <SectionHdr title="📊 Borç Takip — 12 Ay Projeksiyonu" T={T} />
+
+      {/* Özet rozetler */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+        {[
+          ['Şu an toplam borç', fmt(totalNow), T.danger],
+          ['12 ay sonra', fmt(total12), T.success],
+          ['Aylık ödeme yükü', fmt(monthlyLoanPayment), T.warning],
+          [netMonthly >= 0 ? 'Aylık net artı' : 'Aylık net eksi', fmt(Math.abs(netMonthly)), netMonthly >= 0 ? T.success : T.danger],
+        ].map(([lbl, val, color]) => (
+          <div key={lbl} style={{ background: T.surface2, borderRadius: 10, padding: '10px 12px' }}>
+            <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 3 }}>{lbl}</div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700, color }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Çizgi grafik */}
+      <svg width={W} height={H + 24} style={{ overflow: 'visible', display: 'block', margin: '0 auto' }}>
+        <defs>
+          <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={T.danger} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={T.danger} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* Grid lines */}
+        {[0.25, 0.5, 0.75, 1].map(f => (
+          <line key={f} x1="0" y1={H * (1 - f)} x2={W} y2={H * (1 - f)}
+            stroke={T.border} strokeWidth="1" strokeDasharray="3,4" />
+        ))}
+        {/* Area fill */}
+        <path d={areaD} fill="url(#debtGrad)" />
+        {/* Kredi borcu çizgisi (ayrı renk) */}
+        <polyline points={loanPts.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={T.warning} strokeWidth="1.5" strokeDasharray="4,3" opacity=".7" />
+        {/* Toplam borç çizgisi */}
+        <path d={pathD} fill="none" stroke={T.danger} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Başlangıç ve bitiş noktaları */}
+        <circle cx={pts[0].x} cy={pts[0].y} r="4" fill={T.danger} />
+        <circle cx={pts[12].x} cy={pts[12].y} r="4" fill={T.success} />
+        {/* X ekseni etiketleri — sadece ilk, 6. ve son */}
+        {[0, 6, 12].map(i => (
+          <text key={i} x={pts[i].x} y={H + 18} textAnchor="middle" fontSize={T.fs(9)} fill={T.textSub} fontFamily="DM Sans">{projection[i].lbl}</text>
+        ))}
+      </svg>
+
+      {/* Açıklama satırı */}
+      <div style={{ display: 'flex', gap: 14, marginTop: 10, justifyContent: 'center' }}>
+        {[['Toplam borç', T.danger, ''], ['Sadece kredi', T.warning, '4,3']].map(([lbl, color, dash]) => (
+          <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={color} strokeWidth="2" strokeDasharray={dash} /></svg>
+            <span style={{ fontSize: T.fs(10), color: T.textSub }}>{lbl}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Azalış özeti */}
+      <div style={{ marginTop: 12, padding: '10px 14px', background: pctChange > 0 ? T.successBg : T.dangerBg, borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: T.fs(12), fontWeight: 700, color: pctChange > 0 ? T.success : T.danger }}>
+            {pctChange > 0 ? `12 ayda %${pctChange} azalıyor` : 'Borç sabit kalıyor'}
+          </div>
+          {loanFreeMonth > 0 && loanFreeMonth <= 12 && (
+            <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>
+              🏁 {projection[loanFreeMonth].lbl}'da krediniz bitiyor
+            </div>
+          )}
+        </div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(16), fontWeight: 700, color: pctChange > 0 ? T.success : T.danger }}>
+          {pctChange > 0 ? '↓' : '→'}{pctChange > 0 ? fmt(reduction) : ''}
+        </div>
+      </div>
+
+      {monthlyFixedIncome === 0 && (
+        <div style={{ marginTop: 10, padding: '9px 12px', background: T.warningBg, borderRadius: 8 }}>
+          <div style={{ fontSize: T.fs(11), color: T.warning, fontWeight: 600 }}>
+            💡 İşlemler → 🔁 Sabit'ten aylık gelirini ekle — net nakit akışı hesaplansın
+          </div>
+        </div>
+      )}
+    </Card>
+  );
 }
 
 // ─── BÜTÇE MODÜLLERİ ─────────────────────────────────────────────────────────
@@ -1086,7 +1229,7 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
     <div>
       <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Vurgu Rengi</div>
       <Card T={T} style={{ padding: '14px 14px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
           {ACCENT_META.map((a) => {
             const active = accent === a.key;
             return (
@@ -1623,7 +1766,7 @@ function App() {
   React.useEffect(() => {
     if (!user) return;
     const uid = user.uid;
-    const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [] };
+    const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [], recurring: [] };
     const refresh = (key, val) => { raw[key] = val; DATA = computeAppData(raw); forceUpdate(); };
     const unsubs = [
       db.collection(`users/${uid}/transactions`).orderBy('createdAt', 'desc').onSnapshot(s => refresh('transactions', s.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -1631,6 +1774,7 @@ function App() {
       db.collection(`users/${uid}/loans`).onSnapshot(s => refresh('loans', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/budgets`).onSnapshot(s => refresh('budgets', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/upcoming`).onSnapshot(s => refresh('upcoming', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/recurring`).onSnapshot(s => refresh('recurring', s.docs.map(d => ({ id: d.id, ...d.data() })))),
     ];
     // Load saved theme/accent
     db.doc(`users/${uid}/meta/profile`).get().then(doc => {
