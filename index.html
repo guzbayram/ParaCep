@@ -438,16 +438,19 @@ function TabBar({ active, onTab, T }) {
 }
 
 // ─── HEADER ───────────────────────────────────────────────────────────────────
-function AppHeader({ title, T, onSettings, showNotif = true }) {
+function AppHeader({ title, T, onSettings, onLogout, showNotif = true }) {
   return <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
     <span style={{ fontSize: 16, fontWeight: 700, color: T.text, fontFamily: "'DM Sans',sans-serif" }}>{title}</span>
-    <div style={{ display: 'flex', gap: 6 }}>
-      {showNotif && <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textSub, padding: 4, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ display: 'flex', gap: 4 }}>
+      {showNotif && <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textSub, padding: 4, minWidth: 40, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
       </button>}
-      <button onClick={onSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textSub, padding: 4, minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <button onClick={onSettings} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textSub, padding: 4, minWidth: 40, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
       </button>
+      {onLogout && <button onClick={onLogout} title="Çıkış Yap" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.danger, padding: 4, minWidth: 40, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>}
     </div>
   </div>;
 }
@@ -598,25 +601,31 @@ function DebtsScreen({ T }) {
         })}
         <button onClick={() => setModal('card')} style={{ width: '100%', padding: '12px 0', borderRadius: 12, background: T.primaryLight, border: `1.5px dashed ${T.primary}`, color: T.primary, fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Yeni Kart Ekle</button>
       </> : <>
-        <div style={{ background: `linear-gradient(145deg,#111827,#1F2937)`, borderRadius: 16, padding: '16px 18px', color: '#fff' }}>
+        <div style={{ background: `linear-gradient(145deg,${T.primary},${T.primaryDark})`, borderRadius: 16, padding: '16px 18px', color: '#fff' }}>
           <div style={{ fontSize: 11, opacity: .65 }}>Toplam Kredi Borcu</div>
           <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 26, fontWeight: 500, marginTop: 2 }}>{fmtK(totalLoan)}</div>
           <div style={{ fontSize: 11, opacity: .5, marginTop: 6 }}>{DATA.loans.length} aktif kredi</div>
         </div>
         {DATA.loans.map((l, i) => {
-          const total = (l.remaining || 0) + (l.totalPaid || 0);
-          const paidPct = total > 0 ? Math.round((l.totalPaid || 0) / total * 100) : 0;
+          const rc = l.remaining_count || 0;
+          const inst = l.installments || 0;
+          const remaining = l.remaining !== undefined ? l.remaining : (l.monthly || 0) * rc;
+          const totalPaidC = l.totalPaid !== undefined ? l.totalPaid : (l.monthly || 0) * (inst - rc);
+          const total = remaining + totalPaidC;
+          const paidPct = total > 0 ? Math.round(totalPaidC / total * 100) : 0;
+          const dueStr = l.dueDay ? `Her ay ${l.dueDay}. gün` : (l.due || '');
           return (
             <Card key={l.id || i} T={T} style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{l.name}</div>
-                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>{l.bank} · {l.remaining_count}/{l.installments} taksit</div>
+                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>{l.bank} · {rc}/{inst} taksit</div>
+                  {dueStr ? <div style={{ fontSize: 11, color: T.primary, marginTop: 1, fontWeight: 600 }}>{dueStr}</div> : null}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, fontWeight: 500, color: T.text }}>{fmt(l.monthly)}<span style={{ fontSize: 10, fontFamily: "'DM Sans'" }}>/ay</span></div>
-                    <div style={{ fontSize: 11, color: T.textSub }}>Kalan: {fmtK(l.remaining)}</div>
+                    <div style={{ fontSize: 11, color: T.textSub }}>Kalan: {fmtK(remaining)}</div>
                   </div>
                   <button onClick={() => { setEditing(l); setModal('editLoan'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMut, padding: '2px 4px' }}>
                     <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -630,7 +639,7 @@ function DebtsScreen({ T }) {
                 <ProgressBar value={paidPct} color={T.success} T={T} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
                   <span style={{ fontSize: 10, color: T.textSub }}>%{paidPct} ödendi</span>
-                  <span style={{ fontSize: 10, color: T.textSub }}>{fmtK(l.totalPaid || 0)} ödenen</span>
+                  <span style={{ fontSize: 10, color: T.textSub }}>{fmtK(totalPaidC)} ödenen</span>
                 </div>
               </div>
             </Card>);
@@ -1014,38 +1023,47 @@ function AddCardModal({ onClose, T, existing }) {
 }
 
 function AddLoanModal({ onClose, T, existing }) {
-  const [name, setName]           = React.useState(existing?.name || '');
-  const [bank, setBank]           = React.useState(existing?.bank || '');
-  const [monthly, setMonthly]     = React.useState(existing?.monthly ? String(existing.monthly) : '');
-  const [remaining, setRemaining] = React.useState(existing?.remaining ? String(existing.remaining) : '');
-  const [totalPaid, setTotalPaid] = React.useState(existing?.totalPaid ? String(existing.totalPaid) : '');
+  const [name, setName]         = React.useState(existing?.name || '');
+  const [bank, setBank]         = React.useState(existing?.bank || '');
+  const [monthly, setMonthly]   = React.useState(existing?.monthly ? String(existing.monthly) : '');
   const [instTotal, setInstTotal] = React.useState(existing?.installments ? String(existing.installments) : '');
-  const [instLeft, setInstLeft]   = React.useState(existing?.remaining_count ? String(existing.remaining_count) : '');
-  const [saving, setSaving] = React.useState(false);
+  const [instLeft, setInstLeft] = React.useState(existing?.remaining_count ? String(existing.remaining_count) : '');
+  const [dueDay, setDueDay]     = React.useState(existing?.dueDay ? String(existing.dueDay) : '');
+  const [saving, setSaving]     = React.useState(false);
 
   const handleSave = async () => {
-    if (!name.trim() || !monthly || !remaining) return;
+    if (!name.trim() || !monthly || !instLeft) return;
     setSaving(true);
     const user = firebase.auth().currentUser;
-    const db = firebase.firestore();
-    const data = { name: name.trim(), bank: bank.trim(), monthly: parseFloat(monthly), remaining: parseFloat(remaining), totalPaid: parseFloat(totalPaid)||0, installments: parseInt(instTotal)||0, remaining_count: parseInt(instLeft)||0 };
+    const db   = firebase.firestore();
+    const m = parseFloat(monthly), rc = parseInt(instLeft)||0, it = parseInt(instTotal)||0;
+    const data = {
+      name: name.trim(), bank: bank.trim(),
+      monthly: m, installments: it, remaining_count: rc,
+      remaining: m * rc, totalPaid: m * (it - rc),
+      dueDay: parseInt(dueDay)||0,
+    };
     if (existing?.id) await db.collection(`users/${user.uid}/loans`).doc(existing.id).update(data);
     else await db.collection(`users/${user.uid}/loans`).add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     setSaving(false); onClose();
   };
 
+  const preview = monthly && instLeft
+    ? `Kalan borç: ${fmt(parseFloat(monthly||0) * parseInt(instLeft||0))}`
+    : null;
+
   return (
     <BottomSheet title={existing ? 'Krediyi Düzenle' : 'Yeni Kredi Ekle'} onClose={onClose} T={T}>
       <FField label="Kredi Adı" value={name} onChange={setName} placeholder="Konut Kredisi" T={T} />
       <FField label="Banka" value={bank} onChange={setBank} placeholder="Ziraat Bankası" T={T} />
-      <FField label="Aylık Taksit (₺)" value={monthly} onChange={setMonthly} type="number" inputMode="numeric" placeholder="3200" prefix="₺" T={T} />
-      <FField label="Kalan Borç (₺)" value={remaining} onChange={setRemaining} type="number" inputMode="numeric" placeholder="187200" prefix="₺" T={T} />
-      <FField label="Toplam Ödenen (₺)" value={totalPaid} onChange={setTotalPaid} type="number" inputMode="numeric" placeholder="28800" prefix="₺" T={T} />
+      <FField label="Taksit Tutarı (₺)" value={monthly} onChange={setMonthly} type="number" inputMode="numeric" placeholder="3200" prefix="₺" T={T} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <FField label="Toplam Taksit" value={instTotal} onChange={setInstTotal} type="number" inputMode="numeric" placeholder="60" T={T} />
         <FField label="Kalan Taksit" value={instLeft} onChange={setInstLeft} type="number" inputMode="numeric" placeholder="48" T={T} />
       </div>
-      <SaveBtn onSave={handleSave} saving={saving} disabled={!name || !monthly || !remaining} T={T} label={existing ? 'Güncelle' : 'Krediyi Ekle'} />
+      <FField label="Ödeme Günü (1-31)" value={dueDay} onChange={setDueDay} type="number" inputMode="numeric" placeholder="1" T={T} />
+      {preview && <div style={{ fontSize: 12, color: T.primary, fontWeight: 600, marginBottom: 8, padding: '8px 12px', background: T.primaryLight, borderRadius: 8 }}>{preview}</div>}
+      <SaveBtn onSave={handleSave} saving={saving} disabled={!name || !monthly || !instLeft} T={T} label={existing ? 'Güncelle' : 'Krediyi Ekle'} />
     </BottomSheet>
   );
 }
@@ -1060,6 +1078,8 @@ function RecurringModal({ onClose, T }) {
   const [newCat, setNewCat]       = React.useState('Gelir');
   const [newDay, setNewDay]       = React.useState('1');
   const [newFreq, setNewFreq]     = React.useState('monthly');
+  const todayIso = new Date().toISOString().slice(0,10);
+  const [newDate, setNewDate]     = React.useState(todayIso);
   const [saving, setSaving]       = React.useState(false);
 
   const user = firebase.auth().currentUser;
@@ -1101,18 +1121,34 @@ function RecurringModal({ onClose, T }) {
     await db.collection(`users/${user.uid}/recurring`).doc(id).delete();
   };
 
+  const isoToTr = (iso) => {
+    const [y,m,d] = iso.split('-');
+    return `${d}.${m}.${y}`;
+  };
+
   const handleAdd = async () => {
     if (!newLabel.trim() || !newAmount) return;
     setSaving(true);
     const amt = parseFloat(newAmount);
-    await db.collection(`users/${user.uid}/recurring`).add({
+    const entry = {
       label: newLabel.trim(),
       amount: newType === 'income' ? amt : -amt,
       cat: newType === 'income' ? 'Gelir' : newCat,
       catColor: newType === 'income' ? '#059669' : (CAT_COLORS[newCat] || '#9CA3AF'),
-      frequency: newFreq, dayOfMonth: parseInt(newDay)||1,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+      frequency: newFreq,
+      dayOfMonth: newFreq === 'once' ? parseInt(newDate.split('-')[2]) : (parseInt(newDay)||1),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    if (newFreq === 'once') {
+      // Tek seferlik → direkt işlem olarak ekle
+      await db.collection(`users/${user.uid}/transactions`).add({
+        label: entry.label, cat: entry.cat, catColor: entry.catColor,
+        amount: entry.amount, date: isoToTr(newDate),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } else {
+      await db.collection(`users/${user.uid}/recurring`).add(entry);
+    }
     setNewLabel(''); setNewAmount(''); setShowAdd(false); setSaving(false);
   };
 
@@ -1141,7 +1177,7 @@ function RecurringModal({ onClose, T }) {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{item.label}</div>
-            <div style={{ fontSize: 11, color: T.textSub }}>Her {item.frequency === 'monthly' ? 'ay' : 'yıl'} {item.dayOfMonth}. gün</div>
+            <div style={{ fontSize: 11, color: T.textSub }}>{item.frequency === 'monthly' ? `Her ay ${item.dayOfMonth}. gün` : item.frequency === 'yearly' ? `Her yıl ${item.dayOfMonth}. gün` : 'Tek seferlik'}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <MonoAmt value={Math.abs(item.amount)} type={item.amount > 0 ? 'income' : 'expense'} size={13} />
@@ -1169,13 +1205,23 @@ function RecurringModal({ onClose, T }) {
                 {CATS.map(c => <Pill key={c} label={c} active={newCat === c} onClick={() => setNewCat(c)} T={T} />)}
               </div>
             </div>}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <FField label="Gün (1-31)" value={newDay} onChange={setNewDay} type="number" inputMode="numeric" placeholder="1" T={T} />
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Sıklık</div>
-                <SegControl tabs={[['monthly','Aylık'],['yearly','Yıllık']]} active={newFreq} onChange={setNewFreq} T={T} />
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Sıklık</div>
+              <div style={{ display: 'flex', background: T.surface2, borderRadius: 10, padding: 3, gap: 2 }}>
+                {[['monthly','Aylık'],['yearly','Yıllık'],['once','Tek Seferlik']].map(([id,lbl]) =>
+                  <button key={id} onClick={() => setNewFreq(id)} style={{ flex:1, padding:'7px 0', borderRadius:8, fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600, border:'none', cursor:'pointer', background: newFreq===id ? T.surface : 'transparent', color: newFreq===id ? T.primary : T.textSub, boxShadow: newFreq===id ? T.cardShadow : 'none', transition:'all .15s' }}>{lbl}</button>
+                )}
               </div>
             </div>
+            {newFreq === 'once' ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>İşlem Tarihi</div>
+                <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+                  style={{ width:'100%', height:44, border:`1.5px solid ${T.border}`, borderRadius:10, padding:'0 14px', fontSize:14, outline:'none', background:T.surface, color:T.text, fontFamily:"'DM Sans',sans-serif" }} />
+              </div>
+            ) : (
+              <FField label={newFreq === 'yearly' ? 'Hangi Ay Günü' : 'Her Ayın Kaçında'} value={newDay} onChange={setNewDay} type="number" inputMode="numeric" placeholder="1" T={T} />
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowAdd(false)} style={{ flex: 1, height: 44, background: T.surface2, color: T.text, border: `1px solid ${T.border}`, borderRadius: 10, fontFamily: "'DM Sans',sans-serif", fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>İptal</button>
               <button onClick={handleAdd} disabled={saving || !newLabel || !newAmount} style={{ flex: 2, height: 44, background: saving || !newLabel || !newAmount ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 10, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 14, cursor: saving || !newLabel || !newAmount ? 'default' : 'pointer' }}>
@@ -1496,10 +1542,13 @@ function App() {
   };
 
   const renderHeader = () => screen === 'settings'
-    ? <div style={{ height: 56, display: 'flex', alignItems: 'center', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+    ? <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
         <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>Ayarlar</span>
+        <button onClick={handleLogout} title="Çıkış Yap" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.danger, padding: 4, minWidth: 40, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
-    : <AppHeader title={screenTitles[screen] || 'ParaCep'} T={T} onSettings={() => navigate('settings')} showNotif={screen === 'home'} />;
+    : <AppHeader title={screenTitles[screen] || 'ParaCep'} T={T} onSettings={() => navigate('settings')} onLogout={handleLogout} showNotif={screen === 'home'} />;
 
   const TAB_ITEMS = [
     { id: 'home',    lbl: 'Ana Sayfa', icon: c => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
