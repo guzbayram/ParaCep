@@ -677,11 +677,104 @@ function DebtsScreen({ T }) {
   </>;
 }
 
+// ─── İŞLEM DÜZENLE MODAL ──────────────────────────────────────────────────────
+function EditTransactionModal({ tx, onClose, T }) {
+  const isIncome = tx.amount > 0;
+  const [type, setType]     = React.useState(isIncome ? 'income' : 'expense');
+  const [amount, setAmount] = React.useState(String(Math.abs(tx.amount)));
+  const [label, setLabel]   = React.useState(tx.label || '');
+  const [cat, setCat]       = React.useState(isIncome ? 'Gelir' : (tx.cat || 'Mutfak'));
+  const [date, setDate]     = React.useState(() => {
+    // Convert DD.MM.YYYY → YYYY-MM-DD for input[type=date]
+    const parts = (tx.date || '').split('.');
+    return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : new Date().toISOString().slice(0,10);
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
+  const CATS = ['Mutfak','Ulaşım','Sağlık','Giyim','Ev Giderleri','Gelir','Abonelik','Birikim','Diğer'];
+  const user = firebase.auth().currentUser;
+  const db   = firebase.firestore();
+
+  const trDate = (iso) => { const [y,m,d] = iso.split('-'); return `${d}.${m}.${y}`; };
+
+  const handleSave = async () => {
+    const amt = parseFloat(amount.replace(',','.'));
+    if (!amt || amt <= 0) return;
+    setSaving(true);
+    const effectiveCat = type === 'income' ? 'Gelir' : cat;
+    await db.collection(`users/${user.uid}/transactions`).doc(tx.id).update({
+      label: label.trim() || effectiveCat,
+      cat: effectiveCat,
+      catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || '#9CA3AF'),
+      amount: type === 'income' ? amt : -amt,
+      date: trDate(date),
+    });
+    setSaving(false);
+    onClose();
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Bu işlemi silmek istiyor musunuz?')) return;
+    setDeleting(true);
+    await db.collection(`users/${user.uid}/transactions`).doc(tx.id).delete();
+    setDeleting(false);
+    onClose();
+  };
+
+  return (
+    <BottomSheet title="İşlemi Düzenle" onClose={onClose} T={T}>
+      <SegControl tabs={[['expense','Gider'],['income','Gelir']]} active={type}
+        onChange={v => { setType(v); setCat(v === 'income' ? 'Gelir' : 'Mutfak'); }} T={T} />
+
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tutar</div>
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontFamily: "'DM Mono',monospace", fontSize: 18, color: T.textSub }}>₺</span>
+          <input value={amount} onChange={e => setAmount(e.target.value)} type="number" inputMode="decimal" placeholder="0,00"
+            style={{ width: '100%', height: 52, border: `1.5px solid ${T.primary}`, borderRadius: 10, padding: '0 14px 0 32px', fontFamily: "'DM Mono',monospace", fontSize: 18, fontWeight: 500, outline: 'none', boxShadow: `0 0 0 3px ${T.primaryLight}`, background: T.surface, color: T.text }} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Açıklama</div>
+        <input value={label} onChange={e => setLabel(e.target.value)} placeholder={cat}
+          style={{ width: '100%', height: 42, border: `1px solid ${T.border}`, borderRadius: 10, padding: '0 14px', fontSize: T.fs(13), outline: 'none', background: T.surface2, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+      </div>
+
+      {type === 'expense' && <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {CATS.filter(c => c !== 'Gelir').map(c => <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} T={T} />)}
+        </div>
+      </div>}
+
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tarih</div>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)}
+          style={{ width: '100%', height: 44, border: `1px solid ${T.border}`, borderRadius: 10, padding: '0 14px', fontSize: T.fs(14), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button onClick={handleDelete} disabled={deleting}
+          style={{ height: 50, padding: '0 18px', background: T.dangerBg, color: T.danger, border: `1.5px solid ${T.danger}`, borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(14), fontWeight: 700, cursor: deleting ? 'default' : 'pointer', flexShrink: 0 }}>
+          {deleting ? '…' : '🗑️'}
+        </button>
+        <button onClick={handleSave} disabled={saving || !amount}
+          style={{ flex: 1, height: 50, background: saving || !amount ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(14), fontWeight: 700, cursor: saving || !amount ? 'default' : 'pointer', boxShadow: saving || !amount ? 'none' : T.fab }}>
+          {saving ? 'Kaydediliyor…' : 'Güncelle'}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
 // ─── İŞLEMLER ─────────────────────────────────────────────────────────────────
 function TransactionsScreen({ T }) {
   const [filter, setFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const [showRecurring, setShowRecurring] = React.useState(false);
+  const [editingTx, setEditingTx] = React.useState(null);
   const filtered = DATA.transactions.filter((t) => {
     if (filter === 'income' && t.amount <= 0) return false;
     if (filter === 'expense' && t.amount >= 0) return false;
@@ -715,24 +808,31 @@ function TransactionsScreen({ T }) {
         </div> :
 
       <Card T={T} style={{ padding: '0 4px' }}>
-          {filtered.map((t, i) =>
-        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 12px', borderBottom: i < filtered.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 11, background: t.catColor + '1A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.catColor }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{t.label}</div>
-                  <div style={{ fontSize: T.fs(11), color: T.textSub }}>{t.date.slice(0, 5)} · {t.cat}</div>
-                </div>
+        {filtered.map((t, i) => (
+          <div key={t.id} onClick={() => setEditingTx(t)}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 12px', borderBottom: i < filtered.length - 1 ? `1px solid ${T.border}` : 'none', cursor: 'pointer', transition: 'background .12s' }}
+            onMouseEnter={e => e.currentTarget.style.background = T.surface2}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: t.catColor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: 11, height: 11, borderRadius: '50%', background: t.catColor }} />
               </div>
-              <MonoAmt value={Math.abs(t.amount)} type={t.amount > 0 ? 'income' : 'expense'} size={13} />
+              <div>
+                <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{t.label}</div>
+                <div style={{ fontSize: T.fs(11), color: T.textSub }}>{t.date ? t.date.slice(0,5) : ''} · {t.cat}</div>
+              </div>
             </div>
-        )}
-        </Card>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <MonoAmt value={Math.abs(t.amount)} type={t.amount > 0 ? 'income' : 'expense'} size={13} T={T} />
+              <svg width="14" height="14" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+          </div>
+        ))}
+      </Card>
       }
     </Scroller>
     {showRecurring && <RecurringModal onClose={() => setShowRecurring(false)} T={T} />}
+    {editingTx && <EditTransactionModal tx={editingTx} onClose={() => setEditingTx(null)} T={T} />}
   </>;
 }
 
