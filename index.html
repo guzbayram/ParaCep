@@ -120,12 +120,21 @@ const ACCENTS = {
   teal:   { primary: '#0D9488', primaryDark: '#0F766E', primaryLight: '#F0FDFA', fab: '0 4px 14px rgba(13,148,136,.35)' },
 };
 
-function makeTheme(mode, accentKey) {
+const FONT_SCALES = [
+  { key: 'xs', label: 'XS', scale: 0.82, name: 'Çok Küçük' },
+  { key: 's',  label: 'S',  scale: 0.91, name: 'Küçük'     },
+  { key: 'm',  label: 'M',  scale: 1.00, name: 'Orta'      },
+  { key: 'l',  label: 'L',  scale: 1.12, name: 'Büyük'     },
+  { key: 'xl', label: 'XL', scale: 1.25, name: 'Çok Büyük' },
+];
+
+function makeTheme(mode, accentKey, fontScale = 1) {
   const acc = ACCENTS[accentKey] || ACCENTS.purple;
   const dark = mode === 'dark';
+  const fs = (n) => Math.round(n * fontScale);
   return {
     ...acc,
-    dark,
+    dark, fontScale, fs,
     success: '#059669', successBg: dark ? '#064E3B20' : '#ECFDF5',
     warning: '#D97706', warningBg: dark ? '#78350F20' : '#FFFBEB',
     danger: '#DC2626', dangerBg: dark ? '#7F1D1D20' : '#FEF2F2',
@@ -292,15 +301,16 @@ function ProgressBar({ value, color, T, height = 7 }) {
     <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color || T.primary, borderRadius: 9999, transition: 'width .6s ease' }} />
   </div>;
 }
-function MonoAmt({ value, type, size = 14 }) {
+function MonoAmt({ value, type, size = 14, T }) {
   const colors = { income: '#059669', expense: '#DC2626', warn: '#D97706', neutral: 'inherit' };
   const pfx = type === 'income' ? '+' : type === 'expense' ? '−' : '';
-  return <span style={{ fontFamily: "'DM Mono',monospace", fontSize: size, fontWeight: 500, color: colors[type] || 'inherit' }}>{pfx}{fmt(value)}</span>;
+  const sz = T ? T.fs(size) : size;
+  return <span style={{ fontFamily: "'DM Mono',monospace", fontSize: sz, fontWeight: 500, color: colors[type] || 'inherit' }}>{pfx}{fmt(value)}</span>;
 }
 function SectionHdr({ title, action, onAction, T }) {
   return <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-    <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{title}</span>
-    {action && <button onClick={onAction} style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: T.primary, cursor: 'pointer', padding: 0 }}>{action} →</button>}
+    <span style={{ fontSize: T.fs(14), fontWeight: 700, color: T.text }}>{title}</span>
+    {action && <button onClick={onAction} style={{ background: 'none', border: 'none', fontSize: T.fs(12), fontWeight: 600, color: T.primary, cursor: 'pointer', padding: 0 }}>{action} →</button>}
   </div>;
 }
 function Scroller({ children, style = {} }) {
@@ -440,7 +450,7 @@ function TabBar({ active, onTab, T }) {
 // ─── HEADER ───────────────────────────────────────────────────────────────────
 function AppHeader({ title, T, onSettings, onLogout, showNotif = true }) {
   return <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-    <span style={{ fontSize: 16, fontWeight: 700, color: T.text, fontFamily: "'DM Sans',sans-serif" }}>{title}</span>
+    <span style={{ fontSize: T.fs(16), fontWeight: 700, color: T.text, fontFamily: "'DM Sans',sans-serif" }}>{title}</span>
     <div style={{ display: 'flex', gap: 4 }}>
       {showNotif && <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textSub, padding: 4, minWidth: 40, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
@@ -574,8 +584,8 @@ function DebtsScreen({ T }) {
             <Card key={c.id || i} T={T} style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{c.name}</div>
-                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>Son ödeme: {c.due || '-'}</div>
+                  <div style={{ fontSize: T.fs(14), fontWeight: 700, color: T.text }}>{c.name}</div>
+                  <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>Son ödeme: {c.due || '-'}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <div style={{ textAlign: 'right' }}>
@@ -618,8 +628,8 @@ function DebtsScreen({ T }) {
             <Card key={l.id || i} T={T} style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{l.name}</div>
-                  <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>{l.bank} · {rc}/{inst} taksit</div>
+                  <div style={{ fontSize: T.fs(14), fontWeight: 700, color: T.text }}>{l.name}</div>
+                  <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>{l.bank} · {rc}/{inst} taksit</div>
                   {dueStr
                     ? <div style={{ fontSize: 11, color: T.primary, marginTop: 1, fontWeight: 600 }}>📅 {dueStr}</div>
                     : <button onClick={e => { e.stopPropagation(); }} style={{ fontSize: 11, color: T.warning, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginTop: 1, fontWeight: 600, fontFamily: "'DM Sans',sans-serif" }}>⚠️ Ödeme günü girilmemiş — ✏️ düzenle</button>
@@ -703,8 +713,8 @@ function TransactionsScreen({ T }) {
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.catColor }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{t.label}</div>
-                  <div style={{ fontSize: 11, color: T.textSub }}>{t.date.slice(0, 5)} · {t.cat}</div>
+                  <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{t.label}</div>
+                  <div style={{ fontSize: T.fs(11), color: T.textSub }}>{t.date.slice(0, 5)} · {t.cat}</div>
                 </div>
               </div>
               <MonoAmt value={Math.abs(t.amount)} type={t.amount > 0 ? 'income' : 'expense'} size={13} />
@@ -887,7 +897,7 @@ const ACCENT_META = [
   { key: 'teal',   label: 'Turkuaz', color: '#0D9488' },
 ];
 
-function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, user, onLogout, onExport, onDeleteData }) {
+function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, user, onLogout, onExport, onDeleteData }) {
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
@@ -924,8 +934,8 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, user, onLog
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.surface, borderRadius: 14, padding: '16px 14px', border: `1px solid ${T.border}` }}>
       <div style={{ width: 52, height: 52, borderRadius: '50%', background: T.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👤</div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{user?.displayName || 'Kullanıcı'}</div>
-        <div style={{ fontSize: 12, color: T.textSub }}>{user?.email}</div>
+        <div style={{ fontSize: T.fs(15), fontWeight: 700, color: T.text }}>{user?.displayName || 'Kullanıcı'}</div>
+        <div style={{ fontSize: T.fs(13), color: T.textSub }}>{user?.email}</div>
       </div>
     </div>
     {editName && <Card T={T} style={{ padding: '14px 14px' }}>
@@ -939,9 +949,33 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, user, onLog
       </div>
     </Card>}
 
+    {/* Font size picker */}
+    <div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Yazı Boyutu</div>
+      <Card T={T} style={{ padding: '16px 14px' }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+          {FONT_SCALES.map(opt => {
+            const active = fontScaleKey === opt.key;
+            return (
+              <button key={opt.key} onClick={() => onFontScale(opt.key, opt.scale)}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: active ? T.primaryLight : T.surface2, border: `2px solid ${active ? T.primary : 'transparent'}`, borderRadius: 12, padding: '10px 4px', cursor: 'pointer' }}>
+                <span style={{ fontSize: Math.round(16 * opt.scale), fontWeight: 700, color: active ? T.primary : T.text, lineHeight: 1 }}>Aa</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: active ? T.primary : T.textSub }}>{opt.label}</span>
+                <span style={{ fontSize: 9, color: active ? T.primary : T.textMut, fontWeight: 500 }}>{opt.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 12, padding: '10px 12px', background: T.surface2, borderRadius: 8 }}>
+          <span style={{ fontSize: T.fs(13), color: T.text, fontWeight: 500 }}>Örnek metin: </span>
+          <span style={{ fontSize: T.fs(13), color: T.textSub }}>Gelir, gider ve bakiye takibi.</span>
+        </div>
+      </Card>
+    </div>
+
     {/* Accent colour picker */}
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Vurgu Rengi</div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Vurgu Rengi</div>
       <Card T={T} style={{ padding: '14px 14px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {ACCENT_META.map((a) => {
@@ -961,16 +995,16 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, user, onLog
 
     {sections.map((sec, si) =>
     <div key={si}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>{sec.title}</div>
+        <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>{sec.title}</div>
         <Card T={T} style={{ padding: '0 4px' }}>
           {sec.items.map((item, ii) =>
-        <button key={ii} onClick={item.onTap} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 12px', borderBottom: ii < sec.items.length - 1 ? `1px solid ${T.border}` : 'none', background: 'none', border: 'none', cursor: item.onTap ? 'pointer' : 'default', borderRadius: 0, textAlign: 'left' }}>
-              <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{item.icon}</span>
+        <button key={ii} onClick={item.onTap} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 12px', borderBottom: ii < sec.items.length - 1 ? `1px solid ${T.border}` : 'none', background: 'none', border: 'none', cursor: item.onTap ? 'pointer' : 'default', borderRadius: 0, textAlign: 'left' }}>
+              <span style={{ fontSize: T.fs(20), width: 30, textAlign: 'center' }}>{item.icon}</span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: item.danger ? T.danger : item.accent ? T.primary : T.text }}>{item.label}</div>
-                {item.sub && <div style={{ fontSize: 11, color: T.textSub, marginTop: 1 }}>{item.sub}</div>}
+                <div style={{ fontSize: T.fs(14), fontWeight: 600, color: item.danger ? T.danger : item.accent ? T.primary : T.text }}>{item.label}</div>
+                {item.sub && <div style={{ fontSize: T.fs(12), color: T.textSub, marginTop: 2 }}>{item.sub}</div>}
               </div>
-              {!item.danger && item.onTap && <svg width="16" height="16" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>}
+              {!item.danger && item.onTap && <svg width={T.fs(16)} height={T.fs(16)} fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>}
             </button>
         )}
         </Card>
@@ -1445,6 +1479,8 @@ function App() {
   const [theme, setTheme] = React.useState(() => localStorage.getItem('pc_theme') || 'light');
   const [accent, setAccent] = React.useState(() => localStorage.getItem('pc_accent') || 'purple');
   const [chartStyle, setChartStyle] = React.useState('bar');
+  const [fontScaleKey, setFontScaleKey] = React.useState(() => localStorage.getItem('pc_fskey') || 'm');
+  const [fontScale, setFontScale]       = React.useState(() => parseFloat(localStorage.getItem('pc_fs')) || 1.0);
   const [isMobile, setIsMobile] = React.useState(() => window.matchMedia('(max-width: 600px)').matches);
 
   const db = firebase.firestore();
@@ -1493,11 +1529,15 @@ function App() {
       const p = doc.data();
       if (p.theme) { setTheme(p.theme); localStorage.setItem('pc_theme', p.theme); }
       if (p.accent) { setAccent(p.accent); localStorage.setItem('pc_accent', p.accent); }
+      if (p.fontScaleKey) {
+        const opt = FONT_SCALES.find(f => f.key === p.fontScaleKey);
+        if (opt) { setFontScaleKey(opt.key); setFontScale(opt.scale); localStorage.setItem('pc_fskey', opt.key); localStorage.setItem('pc_fs', opt.scale); }
+      }
     });
     return () => unsubs.forEach(u => u());
   }, [user]);
 
-  const T = makeTheme(theme, accent);
+  const T = makeTheme(theme, accent, fontScale);
 
   React.useEffect(() => {
     const tag = document.querySelector('meta[name="theme-color"]');
@@ -1551,6 +1591,8 @@ function App() {
         onToggleDark={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); localStorage.setItem('pc_theme', n); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ theme: n }, { merge: true }); }}
         accent={accent}
         onAccent={v => { setAccent(v); localStorage.setItem('pc_accent', v); window.__setAccent && window.__setAccent(v); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ accent: v }, { merge: true }); }}
+        fontScaleKey={fontScaleKey}
+        onFontScale={(key, scale) => { setFontScaleKey(key); setFontScale(scale); localStorage.setItem('pc_fskey', key); localStorage.setItem('pc_fs', scale); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ fontScaleKey: key }, { merge: true }); }}
         user={user} onLogout={handleLogout} onExport={handleExport} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
@@ -1573,8 +1615,9 @@ function App() {
     { id: 'reports', lbl: 'Raporlar',  icon: c => <svg width="22" height="22" fill="none" stroke={c} strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
   ];
 
-  const renderTabBar = (lblSize = 10, fabOffset = -18) =>
-    TAB_ITEMS.map(t => t.id === 'fab'
+  const renderTabBar = (lblSize = 10, fabOffset = -18) => {
+    const lbl = T.fs(lblSize);
+    return TAB_ITEMS.map(t => t.id === 'fab'
       ? <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
           <button onClick={() => navigate('fab')} style={{ width: 52, height: 52, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: fabOffset }}>
             <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1582,9 +1625,10 @@ function App() {
         </div>
       : <button key={t.id} onClick={() => navigate(t.id)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0, minHeight: 44 }}>
           {t.icon(screen === t.id ? T.primary : T.textMut)}
-          <span style={{ fontSize: lblSize, fontWeight: 600, color: screen === t.id ? T.primary : T.textMut }}>{t.lbl}</span>
+          <span style={{ fontSize: lbl, fontWeight: 600, color: screen === t.id ? T.primary : T.textMut }}>{t.lbl}</span>
         </button>
     );
+  };
 
   // ── Auth loading splash ──
   if (!authReady) return (
