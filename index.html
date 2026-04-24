@@ -479,10 +479,17 @@ function computeUpcoming() {
   const daysLeft = (d) => Math.ceil((d - now) / 86400000);
   const fmtDate  = (d) => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
 
-  // Krediler
+  // Krediler (aylık + yıllık)
   (DATA.loans || []).filter(l => l.dueDay && l.remaining_count > 0).forEach(l => {
-    const d = nextDate(l.dueDay);
-    items.push({ label: l.name, date: fmtDate(d), amount: l.monthly, daysLeft: daysLeft(d), icon: '🏦', _ts: d.getTime() });
+    let d;
+    if (l.frequency === 'yearly') {
+      const month = (l.dueMonth || 1) - 1;
+      d = new Date(now.getFullYear(), month, l.dueDay);
+      if (d < now) d.setFullYear(d.getFullYear() + 1);
+    } else {
+      d = nextDate(l.dueDay);
+    }
+    items.push({ label: l.name, date: fmtDate(d), amount: l.monthly, daysLeft: daysLeft(d), icon: l.frequency === 'yearly' ? '📆' : '🏦', _ts: d.getTime() });
   });
 
   // Kredi kartları
@@ -680,16 +687,23 @@ function DebtsScreen({ T }) {
           const totalPaidC = l.totalPaid !== undefined ? l.totalPaid : (l.monthly || 0) * (inst - rc);
           const total = remaining + totalPaidC;
           const paidPct = total > 0 ? Math.round(totalPaidC / total * 100) : 0;
-          const dueStr = l.dueDay ? `Her ay ${l.dueDay}. gün` : (l.due || '');
+          const isYearly = l.frequency === 'yearly';
+          const dueStr = l.dueDay
+            ? isYearly
+              ? `Her yıl ${MONTHS_TR[(l.dueMonth||1)-1]} ${l.dueDay}. günü`
+              : `Her ay ${l.dueDay}. günü`
+            : (l.due || '');
           return (
             <Card key={l.id || i} T={T} style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: T.fs(14), fontWeight: 700, color: T.text }}>{l.name}</div>
-                  <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>{l.bank} · {rc}/{inst} taksit</div>
+                  <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>
+                    {l.bank} · {rc}/{inst} {isYearly ? 'yıl' : 'taksit'} · {isYearly ? '📆 Yıllık' : '📅 Aylık'}
+                  </div>
                   {dueStr
-                    ? <div style={{ fontSize: 11, color: T.primary, marginTop: 1, fontWeight: 600 }}>📅 {dueStr}</div>
-                    : <button onClick={e => { e.stopPropagation(); }} style={{ fontSize: 11, color: T.warning, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginTop: 1, fontWeight: 600, fontFamily: "'DM Sans',sans-serif" }}>⚠️ Ödeme günü girilmemiş — ✏️ düzenle</button>
+                    ? <div style={{ fontSize: T.fs(11), color: T.primary, marginTop: 1, fontWeight: 600 }}>📅 {dueStr}</div>
+                    : <div style={{ fontSize: T.fs(11), color: T.warning, marginTop: 1, fontWeight: 600 }}>⚠️ Ödeme tarihi girilmemiş</div>
                   }
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1610,60 +1624,93 @@ function AddCardModal({ onClose, T, existing }) {
   );
 }
 
+const MONTHS_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
 function AddLoanModal({ onClose, T, existing }) {
+  const [freq, setFreq]         = React.useState(existing?.frequency || 'monthly');
   const [name, setName]         = React.useState(existing?.name || '');
   const [bank, setBank]         = React.useState(existing?.bank || '');
-  const [monthly, setMonthly]   = React.useState(existing?.monthly ? String(existing.monthly) : '');
+  const [payment, setPayment]   = React.useState(existing?.monthly ? String(existing.monthly) : '');
   const [instTotal, setInstTotal] = React.useState(existing?.installments ? String(existing.installments) : '');
   const [instLeft, setInstLeft] = React.useState(existing?.remaining_count ? String(existing.remaining_count) : '');
   const [dueDay, setDueDay]     = React.useState(existing?.dueDay ? String(existing.dueDay) : '');
+  const [dueMonth, setDueMonth] = React.useState(existing?.dueMonth ? String(existing.dueMonth) : '1');
   const [saving, setSaving]     = React.useState(false);
+  const isYearly = freq === 'yearly';
 
   const handleSave = async () => {
-    if (!name.trim() || !monthly || !instLeft) return;
+    if (!name.trim() || !payment || !instLeft) return;
     setSaving(true);
     const user = firebase.auth().currentUser;
     const db   = firebase.firestore();
-    const m = parseFloat(monthly), rc = parseInt(instLeft)||0, it = parseInt(instTotal)||0;
+    const m = parseFloat(payment), rc = parseInt(instLeft)||0, it = parseInt(instTotal)||0;
     const data = {
-      name: name.trim(), bank: bank.trim(),
+      name: name.trim(), bank: bank.trim(), frequency: freq,
       monthly: m, installments: it, remaining_count: rc,
       remaining: m * rc, totalPaid: m * (it - rc),
       dueDay: parseInt(dueDay)||0,
+      dueMonth: isYearly ? (parseInt(dueMonth)||1) : 0,
     };
     if (existing?.id) await db.collection(`users/${user.uid}/loans`).doc(existing.id).update(data);
     else await db.collection(`users/${user.uid}/loans`).add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     setSaving(false); onClose();
   };
 
-  const preview = monthly && instLeft
-    ? `Kalan borç: ${fmt(parseFloat(monthly||0) * parseInt(instLeft||0))}`
+  const preview = payment && instLeft
+    ? `Kalan borç: ${fmt(parseFloat(payment||0) * parseInt(instLeft||0))}  ${isYearly ? `(${instLeft} yıl)` : `(${instLeft} ay)`}`
     : null;
 
   return (
     <BottomSheet title={existing ? 'Krediyi Düzenle' : 'Yeni Kredi Ekle'} onClose={onClose} T={T}>
-      <FField label="Kredi Adı" value={name} onChange={setName} placeholder="Konut Kredisi" T={T} />
-      <FField label="Banka" value={bank} onChange={setBank} placeholder="Ziraat Bankası" T={T} />
-      <FField label="Taksit Tutarı (₺)" value={monthly} onChange={setMonthly} type="number" inputMode="numeric" placeholder="3200" prefix="₺" T={T} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <FField label="Toplam Taksit" value={instTotal} onChange={setInstTotal} type="number" inputMode="numeric" placeholder="60" T={T} />
-        <FField label="Kalan Taksit" value={instLeft} onChange={setInstLeft} type="number" inputMode="numeric" placeholder="48" T={T} />
+      {/* Ödeme sıklığı */}
+      <div style={{ marginBottom: 14 }}>
+        <SegControl tabs={[['monthly','📅 Aylık Taksitli'],['yearly','📆 Yıllık Ödemeli']]} active={freq} onChange={setFreq} T={T} />
       </div>
+
+      <FField label="Kredi / Borç Adı" value={name} onChange={setName} placeholder={isYearly ? 'Vergi Borcu' : 'Konut Kredisi'} T={T} />
+      <FField label={isYearly ? 'Kurum / Banka' : 'Banka'} value={bank} onChange={setBank} placeholder={isYearly ? 'Vergi Dairesi' : 'Ziraat Bankası'} T={T} />
+      <FField label={isYearly ? 'Yıllık Ödeme Tutarı (₺)' : 'Aylık Taksit Tutarı (₺)'} value={payment} onChange={setPayment} type="number" inputMode="numeric" placeholder={isYearly ? '12000' : '3200'} prefix="₺" T={T} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <FField label={isYearly ? 'Toplam Yıl' : 'Toplam Taksit'} value={instTotal} onChange={setInstTotal} type="number" inputMode="numeric" placeholder={isYearly ? '5' : '60'} T={T} />
+        <FField label={isYearly ? 'Kalan Yıl' : 'Kalan Taksit'} value={instLeft} onChange={setInstLeft} type="number" inputMode="numeric" placeholder={isYearly ? '3' : '48'} T={T} />
+      </div>
+
+      {/* Ödeme tarihi */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Aylık Taksit Ödeme Tarihi</div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+          {isYearly ? 'Yıllık Ödeme Tarihi' : 'Aylık Taksit Ödeme Günü'}
+        </div>
+        {isYearly ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4, textAlign: 'center' }}>Ay</div>
+              <select value={dueMonth} onChange={e => setDueMonth(e.target.value)}
+                style={{ width: '100%', height: 44, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '0 10px', fontSize: T.fs(13), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }}>
+                {MONTHS_TR.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4, textAlign: 'center' }}>Gün</div>
+              <input value={dueDay} onChange={e => setDueDay(e.target.value)} type="number" inputMode="numeric" min="1" max="31" placeholder="1"
+                style={{ width: '100%', height: 44, border: `1.5px solid ${dueDay ? T.primary : T.border}`, borderRadius: 10, padding: '0 10px', fontSize: T.fs(16), fontWeight: 700, outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Mono',monospace", textAlign: 'center' }} />
+            </div>
+          </div>
+        ) : (
+          <div style={{ position: 'relative' }}>
             <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: T.textSub, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>Her ayın</span>
             <input value={dueDay} onChange={e => setDueDay(e.target.value)} type="number" inputMode="numeric" min="1" max="31" placeholder="—"
               style={{ width: '100%', height: 44, border: `1.5px solid ${dueDay ? T.primary : T.border}`, borderRadius: 10, padding: '0 44px 0 90px', fontSize: 16, fontWeight: 700, outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Mono',monospace", textAlign: 'center' }} />
             <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: T.textSub, fontSize: 13, fontWeight: 500 }}>. günü</span>
           </div>
-        </div>
-        {dueDay && <div style={{ fontSize: 12, color: T.primary, fontWeight: 600, marginTop: 6 }}>📅 Her ay {dueDay}. günü ödeme yapılacak</div>}
-        {!dueDay && <div style={{ fontSize: 11, color: T.textMut, marginTop: 5 }}>Boş bırakılabilir, sonradan düzenleyebilirsiniz</div>}
+        )}
+        {dueDay && <div style={{ fontSize: T.fs(12), color: T.primary, fontWeight: 600, marginTop: 6 }}>
+          📅 {isYearly ? `Her yıl ${MONTHS_TR[parseInt(dueMonth||1)-1]} ayının ${dueDay}. günü` : `Her ay ${dueDay}. günü`} ödeme yapılacak
+        </div>}
       </div>
-      {preview && <div style={{ fontSize: 12, color: T.primary, fontWeight: 600, marginBottom: 8, padding: '8px 12px', background: T.primaryLight, borderRadius: 8 }}>{preview}</div>}
-      <SaveBtn onSave={handleSave} saving={saving} disabled={!name || !monthly || !instLeft} T={T} label={existing ? 'Güncelle' : 'Krediyi Ekle'} />
+
+      {preview && <div style={{ fontSize: T.fs(12), color: T.primary, fontWeight: 600, marginBottom: 8, padding: '8px 12px', background: T.primaryLight, borderRadius: 8 }}>{preview}</div>}
+      <SaveBtn onSave={handleSave} saving={saving} disabled={!name || !payment || !instLeft} T={T} label={existing ? 'Güncelle' : 'Krediyi Ekle'} />
     </BottomSheet>
   );
 }
