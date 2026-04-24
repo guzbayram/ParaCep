@@ -2224,9 +2224,12 @@ function QuickAddModal({ onClose, onSave, T }) {
   const [amount, setAmount] = React.useState('');
   const [label, setLabel] = React.useState('');
   const [cat, setCat] = React.useState('Mutfak');
+  const [linkedBudgetId, setLinkedBudgetId] = React.useState(null);
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = React.useState(false);
   const CATS = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Gelir', 'Abonelik', 'Birikim', 'Diğer'];
+  const spendingBudgets = (DATA.budgets || []).filter(b => b.type !== 'saving');
+  const savingBudgets   = (DATA.budgets || []).filter(b => b.type === 'saving');
 
   const isoToTr = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
   const isToday = date === new Date().toISOString().slice(0, 10);
@@ -2242,6 +2245,7 @@ function QuickAddModal({ onClose, onSave, T }) {
       catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || '#9CA3AF'),
       amount: type === 'income' ? amt : -amt,
       date: isoToTr(date),
+      ...(linkedBudgetId ? { linkedBudgetId } : {}),
     });
     setSaving(false);
     onClose();
@@ -2254,7 +2258,7 @@ function QuickAddModal({ onClose, onSave, T }) {
         <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, textAlign: 'center', padding: '14px 0 12px', borderBottom: `1px solid ${T.border}` }}>İşlem Ekle</div>
         <div style={{ marginTop: 14 }}>
-          <SegControl tabs={[['expense', 'Gider'], ['income', 'Gelir']]} active={type} onChange={v => { setType(v); if (v === 'income') setCat('Gelir'); else setCat('Mutfak'); }} T={T} />
+          <SegControl tabs={[['expense', 'Gider'], ['income', 'Gelir']]} active={type} onChange={v => { setType(v); setLinkedBudgetId(null); if (v === 'income') setCat('Gelir'); else setCat('Mutfak'); }} T={T} />
         </div>
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tutar</div>
@@ -2272,7 +2276,23 @@ function QuickAddModal({ onClose, onSave, T }) {
         {type === 'expense' && <div style={{ marginTop: 13 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {CATS.filter(c => c !== 'Gelir').map(c => <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} T={T} />)}
+            {CATS.filter(c => c !== 'Gelir').map(c => <Pill key={c} label={c} active={cat === c && !linkedBudgetId} onClick={() => { setCat(c); setLinkedBudgetId(null); }} T={T} />)}
+          </div>
+          {spendingBudgets.length > 0 && <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, margin: '10px 0 7px', textTransform: 'uppercase', letterSpacing: '.05em' }}>Bütçeden Düş</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {spendingBudgets.map(b => (
+                <Pill key={b.id} label={`${b.icon || ''} ${b.name}`} active={linkedBudgetId === b.id} onClick={() => { setCat(b.name); setLinkedBudgetId(b.id); }} T={T} />
+              ))}
+            </div>
+          </>}
+        </div>}
+        {type === 'income' && savingBudgets.length > 0 && <div style={{ marginTop: 13 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Birikime Ekle (opsiyonel)</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {savingBudgets.map(b => (
+              <Pill key={b.id} label={`${b.icon || ''} ${b.name}`} active={linkedBudgetId === b.id} onClick={() => setLinkedBudgetId(linkedBudgetId === b.id ? null : b.id)} T={T} />
+            ))}
           </div>
         </div>}
         <div style={{ marginTop: 13 }}>
@@ -2397,7 +2417,17 @@ function App() {
 
   const saveTransaction = async txData => {
     if (!user) return;
-    await db.collection(`users/${user.uid}/transactions`).add({ ...txData, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    const { linkedBudgetId, ...tx } = txData;
+    await db.collection(`users/${user.uid}/transactions`).add({ ...tx, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    if (linkedBudgetId) {
+      const budget = DATA.budgets.find(b => b.id === linkedBudgetId);
+      if (budget) {
+        const field = budget.type === 'saving' ? 'saved' : 'spent';
+        const delta = budget.type === 'saving' ? Math.abs(txData.amount) : Math.abs(txData.amount);
+        const newVal = Math.max(0, (budget[field] || 0) + delta);
+        await db.collection(`users/${user.uid}/budgets`).doc(linkedBudgetId).update({ [field]: newVal });
+      }
+    }
   };
 
   const handleLogout = async () => {
