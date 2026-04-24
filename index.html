@@ -2491,7 +2491,7 @@ function QuickAddModal({ onClose, onSave, T }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{type === 'expense' ? 'Ödeme Hesabı' : 'Gelir Hesabı'}</div>
             {!accountId && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, justifyItems: 'center' }}>
             {(DATA.accounts || []).map(a => {
               const active = accountId === a.id;
               return (
@@ -2519,7 +2519,7 @@ function QuickAddModal({ onClose, onSave, T }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
             {!cat && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
             {spendingBudgets.map(b => (
               <Pill key={b.id} label={`${b.icon ? b.icon + ' ' : ''}${b.name}`} active={linkedBudgetId === b.id} onClick={() => { setCat(b.name); setLinkedBudgetId(b.id); }} T={T} />
             ))}
