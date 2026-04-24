@@ -2232,16 +2232,44 @@ function App() {
   }
 
   // ── Mobile full-screen layout ──
+  const SWIPE_SCREENS = ['home', 'debts', 'budgets', 'txns'];
+  const swipeRef = React.useRef({ x: 0, y: 0, moved: false });
+
+  const handleTouchStart = (e) => {
+    swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false };
+  };
+
+  const handleTouchEnd = (e) => {
+    if (modal) return;
+    const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+    const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+    if (Math.abs(dx) < 55 || Math.abs(dy) > Math.abs(dx) * 0.9) return;
+    const cur = SWIPE_SCREENS.indexOf(screen);
+    if (cur === -1) return;
+    if (dx < 0 && cur < SWIPE_SCREENS.length - 1) navigate(SWIPE_SCREENS[cur + 1]);
+    if (dx > 0 && cur > 0) navigate(SWIPE_SCREENS[cur - 1]);
+  };
+
+  const swipeDots = SWIPE_SCREENS.includes(screen) && (
+    <div style={{ position: 'absolute', bottom: 6, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none' }}>
+      {SWIPE_SCREENS.map(s => (
+        <div key={s} style={{ width: screen === s ? 16 : 5, height: 5, borderRadius: 9999, background: screen === s ? T.primary : T.textMut, opacity: screen === s ? 1 : 0.35, transition: 'all .25s' }} />
+      ))}
+    </div>
+  );
+
   if (isMobile) return (
     <div style={{ position: 'fixed', inset: 0, background: T.bg, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", overflow: 'hidden' }}>
       <div style={{ height: 'env(safe-area-inset-top)', background: T.surface, flexShrink: 0 }} />
       {renderHeader()}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+        onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {renderScreen()}
         {modal && <QuickAddModal onClose={() => setModal(false)} onSave={saveTransaction} T={T} />}
       </div>
-      <div style={{ background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
+      <div style={{ background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0, position: 'relative' }}>
         {renderTabBar()}
+        {swipeDots}
       </div>
     </div>
   );
