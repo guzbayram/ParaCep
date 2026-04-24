@@ -1,0 +1,8 @@
+# Git internal files
+.git/
+
+# Binary image files
+icons/
+
+# GitHub Actions workflows (not needed for code context)
+.github/
