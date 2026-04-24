@@ -653,7 +653,7 @@ function DebtsScreen({ T }) {
       });
       await db.collection(`users/${user.uid}/transactions`).add({
         label: `${card.name} Ödemesi (${sourceLoan.name})`, cat: 'Kart Ödemesi', catColor: '#1E3A5F',
-        amount: 0, date: today,
+        amount: -amount, date: today,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     } else {
@@ -1256,6 +1256,7 @@ function DebtTrackingCard({ T }) {
   const cards = DATA.cards || [];
   const recurring = DATA.recurring || [];
   const [openTip, setOpenTip] = React.useState(null);
+  React.useEffect(() => { setOpenTip(null); }, [T.showTips]);
 
   // Aylık sabit gider/gelir net farkı
   const monthlyFixedIncome  = recurring.filter(r => r.amount > 0 && r.frequency === 'monthly').reduce((s, r) => s + r.amount, 0);
@@ -1798,6 +1799,7 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
+  const [showGuide, setShowGuide] = React.useState(false);
 
   const saveName = async () => {
     if (!nameVal.trim()) return;
@@ -1824,8 +1826,8 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
     { icon: '🗑️', label: 'Tüm Veriyi Sil', sub: 'Geri alınamaz', danger: true, onTap: onDeleteData }]
   },
   { title: 'Hakkında', items: [
-    { icon: '📋', label: 'ParaCep', sub: 'Sürüm 1.2.0' },
-    { icon: '❓', label: 'Yardım & SSS', sub: 'paracep@destek.com' }]
+    { icon: '📋', label: 'ParaCep', sub: 'Sürüm 1.3.0' },
+    { icon: 'ℹ️', label: 'Uygulama Rehberi', sub: 'Nasıl kullanılır?', onTap: () => setShowGuide(v => !v) }]
   }];
 
   return <>
@@ -1928,6 +1930,33 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
         )}
         </Card>
       </div>
+    )}
+
+    {showGuide && (
+      <Card T={T} style={{ padding: '16px 14px', marginTop: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ fontSize: T.fs(14), fontWeight: 700, color: T.text }}>ℹ️ Uygulama Rehberi</div>
+          <button onClick={() => setShowGuide(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMut, fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+        {[
+          { icon: '🏠', title: 'Ana Sayfa', desc: 'Genel bakiye, yaklaşan ödemeler ve son işlemler. Sol-sağ kaydırarak diğer ekranlara geçebilirsiniz.' },
+          { icon: '💳', title: 'Borçlar', desc: 'Kredi kartı borçları ve banka kredileri. Ödeme Yap butonu ile taksit veya kart ödemesi yapabilirsiniz.' },
+          { icon: '➕', title: 'İşlem Ekle (+ butonu)', desc: 'Merkezdeki + butonuna basın. Gelir veya gider seçin, tutarı girin, hesap ve kategori seçin. Bütçe kategorisi seçilince ilgili bütçeniz otomatik güncellenir.' },
+          { icon: '🏦', title: 'Hesaplar', desc: 'Nakit, banka, birikim gibi hesaplarınızı yönetin. Her hesabın giriş-çıkış hareketlerini görüntüleyin. Yeni hesap eklemek için + Yeni Hesap Ekle butonunu kullanın.' },
+          { icon: '📊', title: 'Bütçe', desc: 'Harcama bütçeleri ve birikim hedefleri oluşturun. İşlem eklerken bütçe kategorisi seçince harcama otomatik düşülür.' },
+          { icon: '📋', title: 'İşlemler', desc: 'Tüm gelir ve giderlerinizi listeleyin, filtreleyin, arayın. Bir işleme tıklayarak düzenleyebilirsiniz.' },
+          { icon: '📈', title: 'Raporlar', desc: '6 aylık gelir-gider trendi, kategori dağılımı ve 12 aylık borç projeksiyonu. Kart bilgi ikonlarına tıklayarak hesap formüllerini görebilirsiniz.' },
+          { icon: '⚙️', title: 'Ayarlar', desc: 'Tema, renk, yazı boyutu, bilgi ikonları, veri dışa aktarma. JSON veya CSV formatında yedek alabilirsiniz.' },
+        ].map((item, i) => (
+          <div key={i} style={{ display: 'flex', gap: 12, paddingBottom: 12, marginBottom: 12, borderBottom: i < 7 ? `1px solid ${T.border}` : 'none' }}>
+            <div style={{ fontSize: 22, flexShrink: 0, width: 30, textAlign: 'center' }}>{item.icon}</div>
+            <div>
+              <div style={{ fontSize: T.fs(13), fontWeight: 700, color: T.text, marginBottom: 2 }}>{item.title}</div>
+              <div style={{ fontSize: T.fs(12), color: T.textSub, lineHeight: 1.5 }}>{item.desc}</div>
+            </div>
+          </div>
+        ))}
+      </Card>
     )}
   </Scroller>
   </>;
@@ -2492,6 +2521,11 @@ function QuickAddModal({ onClose, onSave, T }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{type === 'expense' ? 'Ödeme Hesabı' : 'Gelir Hesabı'}</div>
             {!accountId && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
           </div>
+          {(DATA.accounts || []).length === 0 && (
+            <div style={{ background: T.warningBg, border: `1px solid ${T.warning}44`, borderRadius: 10, padding: '10px 12px', fontSize: T.fs(12), color: T.warning, fontWeight: 600 }}>
+              ⚠️ Önce Hesaplar menüsünden bir hesap oluşturun.
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {(DATA.accounts || []).map((a, idx, arr) => {
               const active = accountId === a.id;
@@ -2682,7 +2716,7 @@ function App() {
   };
 
   const handleExport = () => {
-    const blob = new Blob([JSON.stringify({ transactions: DATA.transactions, cards: DATA.cards, loans: DATA.loans, budgets: DATA.budgets }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ transactions: DATA.transactions, cards: DATA.cards, loans: DATA.loans, budgets: DATA.budgets, accounts: DATA.accounts, recurring: DATA.recurring }, null, 2)], { type: 'application/json' });
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'paracep-verilerim.json' });
     a.click(); URL.revokeObjectURL(a.href);
   };
