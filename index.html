@@ -2649,6 +2649,7 @@ function App() {
   // ── Actions ──
   const navigate = id => {
     if (id === 'fab') { setModal(true); return; }
+    setModal(false);
     setScreen(id); localStorage.setItem('pc_screen', id);
   };
 
