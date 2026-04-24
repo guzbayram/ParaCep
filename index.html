@@ -2064,6 +2064,7 @@ function App() {
   const [fontScaleKey, setFontScaleKey] = React.useState(() => localStorage.getItem('pc_fskey') || 'm');
   const [fontScale, setFontScale]       = React.useState(() => parseFloat(localStorage.getItem('pc_fs')) || 1.0);
   const [isMobile, setIsMobile] = React.useState(() => window.matchMedia('(max-width: 600px)').matches);
+  const swipeRef = React.useRef({ x: 0, y: 0 }); // swipe — hook'lar en üstte olmalı
 
   const db = firebase.firestore();
   const auth = firebase.auth();
@@ -2233,7 +2234,6 @@ function App() {
 
   // ── Mobile full-screen layout ──
   const SWIPE_SCREENS = ['home', 'debts', 'budgets', 'txns'];
-  const swipeRef = React.useRef({ x: 0, y: 0, moved: false });
 
   const handleTouchStart = (e) => {
     swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false };
