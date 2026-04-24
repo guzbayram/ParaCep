@@ -1676,6 +1676,13 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
+  const [accountModal, setAccountModal] = React.useState(null); // null | 'add' | {existing}
+  const db = firebase.firestore();
+
+  const deleteAccount = async (id) => {
+    if (!window.confirm('Bu hesabı silmek istiyor musunuz?')) return;
+    await db.collection(`users/${user.uid}/accounts`).doc(id).delete();
+  };
 
   const saveName = async () => {
     if (!nameVal.trim()) return;
@@ -1705,7 +1712,8 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
     { icon: '❓', label: 'Yardım & SSS', sub: 'paracep@destek.com' }]
   }];
 
-  return <Scroller>
+  return <>
+  <Scroller>
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.surface, borderRadius: 14, padding: '16px 14px', border: `1px solid ${T.border}` }}>
       <div style={{ width: 52, height: 52, borderRadius: '50%', background: T.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>👤</div>
       <div style={{ flex: 1 }}>
@@ -1726,6 +1734,33 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
 
     {/* Admin Panel — sadece admin görür */}
     {isAdmin && <AdminPanel T={T} db={firebase.firestore()} />}
+
+    {/* Hesaplar */}
+    <div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Hesaplar</div>
+      <Card T={T} style={{ padding: '0 4px' }}>
+        {(DATA.accounts || []).map((a, i) => (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 12px', borderBottom: i < DATA.accounts.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: (a.color || T.primary) + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{a.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{a.name}</div>
+              <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 1 }}>{ACCOUNT_TYPES.find(t => t.key === a.type)?.label || 'Hesap'}</div>
+            </div>
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700, color: a.balance >= 0 ? T.success : T.danger, marginRight: 8 }}>{fmt(a.balance)}</div>
+            <button onClick={() => setAccountModal(a)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMut, padding: '2px 4px' }}>
+              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button onClick={() => deleteAccount(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.danger, padding: '2px 4px' }}>
+              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+            </button>
+          </div>
+        ))}
+        <button onClick={() => setAccountModal('add')}
+          style={{ width: '100%', padding: '12px 0', background: 'none', border: 'none', borderTop: DATA.accounts?.length ? `1px solid ${T.border}` : 'none', cursor: 'pointer', color: T.primary, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(13), fontWeight: 700 }}>
+          + Yeni Hesap Ekle
+        </button>
+      </Card>
+    </div>
 
     {/* Bilgi ikonları toggle */}
     <div>
@@ -1805,10 +1840,78 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
         </Card>
       </div>
     )}
-  </Scroller>;
+  </Scroller>
+  {accountModal === 'add' && <AddAccountModal onClose={() => setAccountModal(null)} T={T} />}
+  {accountModal && accountModal !== 'add' && <AddAccountModal onClose={() => setAccountModal(null)} T={T} existing={accountModal} />}
+  </>;
 }
 
 // ─── KART / KREDİ MODALLARI ───────────────────────────────────────────────────
+// ─── HESAP EKLE / DÜZENLE ─────────────────────────────────────────────────────
+const ACCOUNT_TYPES = [
+  { key: 'cash',    label: 'Nakit',        icon: '💵' },
+  { key: 'bank',    label: 'Banka Hesabı', icon: '🏦' },
+  { key: 'savings', label: 'Birikim',      icon: '🏧' },
+  { key: 'invest',  label: 'Yatırım',      icon: '📈' },
+];
+const ACCOUNT_COLORS = ['#1E3A5F','#7C3AED','#059669','#F97316','#DC2626','#0D9488'];
+
+function AddAccountModal({ onClose, T, existing }) {
+  const [name, setName]       = React.useState(existing?.name || '');
+  const [typeKey, setTypeKey] = React.useState(existing?.type || 'bank');
+  const [balance, setBalance] = React.useState(existing?.balance != null ? String(existing.balance) : '');
+  const [colorIdx, setColorIdx] = React.useState(ACCOUNT_COLORS.indexOf(existing?.color) >= 0 ? ACCOUNT_COLORS.indexOf(existing.color) : 0);
+  const [saving, setSaving]   = React.useState(false);
+
+  const selType = ACCOUNT_TYPES.find(t => t.key === typeKey) || ACCOUNT_TYPES[1];
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    const user = firebase.auth().currentUser;
+    const db   = firebase.firestore();
+    const data = { name: name.trim(), type: typeKey, icon: selType.icon, balance: parseFloat(balance) || 0, color: ACCOUNT_COLORS[colorIdx] };
+    if (existing?.id) await db.collection(`users/${user.uid}/accounts`).doc(existing.id).update(data);
+    else await db.collection(`users/${user.uid}/accounts`).add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    setSaving(false); onClose();
+  };
+
+  return (
+    <BottomSheet title={existing ? 'Hesabı Düzenle' : 'Yeni Hesap Ekle'} onClose={onClose} T={T}>
+      <FField label="Hesap Adı" value={name} onChange={setName} placeholder="Ziraat Bankası" T={T} />
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Hesap Türü</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {ACCOUNT_TYPES.map(t => {
+            const active = typeKey === t.key;
+            return (
+              <button key={t.key} onClick={() => setTypeKey(t.key)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 10,
+                  border: `1.5px solid ${active ? T.primary : T.border}`,
+                  background: active ? T.primaryLight : T.surface2,
+                  cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                  color: active ? T.primary : T.textSub }}>
+                <span>{t.icon}</span><span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <FField label="Mevcut Bakiye (₺)" value={balance} onChange={setBalance} type="number" inputMode="decimal" placeholder="0,00" prefix="₺" T={T} />
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Renk</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {ACCOUNT_COLORS.map((c, i) => (
+            <button key={i} onClick={() => setColorIdx(i)}
+              style={{ width: 32, height: 32, borderRadius: '50%', background: c, border: colorIdx === i ? `3px solid ${T.text}` : '3px solid transparent', cursor: 'pointer' }} />
+          ))}
+        </div>
+      </div>
+      <SaveBtn onSave={handleSave} saving={saving} disabled={!name} T={T} label={existing ? 'Güncelle' : 'Hesabı Ekle'} />
+    </BottomSheet>
+  );
+}
+
 function AddCardModal({ onClose, T, existing }) {
   const [name, setName]       = React.useState(existing?.name || '');
   const [limit, setLimit]     = React.useState(existing?.limit ? String(existing.limit) : '');
