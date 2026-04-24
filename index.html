@@ -599,21 +599,49 @@ function DashboardScreen({ T, onNav }) {
 // ─── BORÇLAR ──────────────────────────────────────────────────────────────────
 function DebtsScreen({ T }) {
   const [tab, setTab] = React.useState('cards');
-  const [modal, setModal] = React.useState(null); // 'card' | 'loan' | 'editCard' | 'editLoan'
+  const [modal, setModal] = React.useState(null);
   const [editing, setEditing] = React.useState(null);
+  const [payItem, setPayItem] = React.useState(null); // { type:'card'|'loan', item }
 
   const totalCard = DATA.cards.reduce((s, c) => s + (c.balance || 0), 0);
   const totalLoan = DATA.loans.reduce((s, l) => s + (l.remaining || 0), 0);
 
+  const user = firebase.auth().currentUser;
+  const db   = firebase.firestore();
+
   const deleteCard = async (id) => {
     if (!id || !window.confirm('Bu kartı silmek istiyor musunuz?')) return;
-    const user = firebase.auth().currentUser;
-    await firebase.firestore().collection(`users/${user.uid}/cards`).doc(id).delete();
+    await db.collection(`users/${user.uid}/cards`).doc(id).delete();
   };
   const deleteLoan = async (id) => {
     if (!id || !window.confirm('Bu krediyi silmek istiyor musunuz?')) return;
-    const user = firebase.auth().currentUser;
-    await firebase.firestore().collection(`users/${user.uid}/loans`).doc(id).delete();
+    await db.collection(`users/${user.uid}/loans`).doc(id).delete();
+  };
+
+  // Kredi kartı ödemesi
+  const payCard = async (card, amount) => {
+    const newBalance = Math.max(0, (card.balance || 0) - amount);
+    await db.collection(`users/${user.uid}/cards`).doc(card.id).update({ balance: newBalance });
+    const today = new Date().toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'.');
+    await db.collection(`users/${user.uid}/transactions`).add({
+      label: `${card.name} Ödemesi`, cat: 'Kart Ödemesi', catColor: '#1E3A5F',
+      amount: -amount, date: today,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  };
+
+  // Kredi taksit ödemesi
+  const payLoan = async (loan) => {
+    const rc  = Math.max(0, (loan.remaining_count || 0) - 1);
+    const rem = Math.max(0, (loan.remaining || 0) - (loan.monthly || 0));
+    const paid = (loan.totalPaid || 0) + (loan.monthly || 0);
+    await db.collection(`users/${user.uid}/loans`).doc(loan.id).update({ remaining_count: rc, remaining: rem, totalPaid: paid });
+    const today = new Date().toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'.');
+    await db.collection(`users/${user.uid}/transactions`).add({
+      label: `${loan.name} Taksiti`, cat: 'Kredi Taksiti', catColor: '#059669',
+      amount: -(loan.monthly || 0), date: today,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
   };
 
   return <>
@@ -659,9 +687,12 @@ function DebtsScreen({ T }) {
               </div>
               <div style={{ marginTop: 10 }}>
                 <ProgressBar value={pct} color={alertColor} T={T} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-                  <span style={{ fontSize: 10, color: T.textSub }}>Kullanım %{pct}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: alertColor }}>{pct >= 60 ? 'Yüksek risk' : pct >= 40 ? 'Orta' : 'Düşük'}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                  <span style={{ fontSize: T.fs(10), color: T.textSub }}>Kullanım %{pct}</span>
+                  <button onClick={() => setPayItem({ type: 'card', item: c })}
+                    style={{ height: 30, padding: '0 14px', background: T.success, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(12), fontWeight: 700, cursor: 'pointer' }}>
+                    💳 Ödeme Yap
+                  </button>
                 </div>
               </div>
             </Card>);
@@ -721,9 +752,13 @@ function DebtsScreen({ T }) {
               </div>
               <div style={{ marginTop: 10 }}>
                 <ProgressBar value={paidPct} color={T.success} T={T} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-                  <span style={{ fontSize: 10, color: T.textSub }}>%{paidPct} ödendi</span>
-                  <span style={{ fontSize: 10, color: T.textSub }}>{fmtK(totalPaidC)} ödenen</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                  <span style={{ fontSize: T.fs(10), color: T.textSub }}>%{paidPct} ödendi · {fmtK(totalPaidC)} ödenen</span>
+                  {rc > 0 && <button onClick={() => setPayItem({ type: 'loan', item: l })}
+                    style={{ height: 30, padding: '0 14px', background: T.success, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(12), fontWeight: 700, cursor: 'pointer' }}>
+                    ✅ Taksit Öde
+                  </button>}
+                  {rc === 0 && <span style={{ fontSize: T.fs(11), fontWeight: 700, color: T.success }}>🎉 Tamamlandı</span>}
                 </div>
               </div>
             </Card>);
@@ -736,6 +771,38 @@ function DebtsScreen({ T }) {
     {modal === 'loan'     && <AddLoanModal onClose={() => setModal(null)} T={T} />}
     {modal === 'editCard' && editing && <AddCardModal onClose={() => { setModal(null); setEditing(null); }} T={T} existing={editing} />}
     {modal === 'editLoan' && editing && <AddLoanModal onClose={() => { setModal(null); setEditing(null); }} T={T} existing={editing} />}
+
+    {/* Kredi kartı ödeme */}
+    {payItem?.type === 'card' && (
+      <AmountEntryModal
+        title={`💳 ${payItem.item.name} Ödemesi`}
+        confirmLabel="Ödemeyi Kaydet"
+        color={T.success}
+        onConfirm={v => payCard(payItem.item, v)}
+        onClose={() => setPayItem(null)}
+        T={T}
+      />
+    )}
+
+    {/* Kredi taksit onayı */}
+    {payItem?.type === 'loan' && (
+      <BottomSheet title={`✅ ${payItem.item.name} Taksit Ödemesi`} onClose={() => setPayItem(null)} T={T}>
+        <div style={{ background: T.surface2, borderRadius: 12, padding: '16px 14px', marginBottom: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: T.fs(11), color: T.textSub, marginBottom: 6 }}>Ödenecek tutar</div>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(28), fontWeight: 700, color: T.success }}>{fmt(payItem.item.monthly)}</div>
+          <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 6 }}>
+            Kalan taksit: {payItem.item.remaining_count} → {Math.max(0, payItem.item.remaining_count - 1)}
+          </div>
+        </div>
+        <SaveBtn
+          onSave={async () => { await payLoan(payItem.item); setPayItem(null); }}
+          saving={false}
+          disabled={false}
+          T={T}
+          label="Taksiti Ödedim"
+        />
+      </BottomSheet>
+    )}
   </>;
 }
 
