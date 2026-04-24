@@ -1967,10 +1967,13 @@ function QuickAddModal({ onClose, onSave, T }) {
   const [amount, setAmount] = React.useState('');
   const [label, setLabel] = React.useState('');
   const [cat, setCat] = React.useState('Mutfak');
+  const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = React.useState(false);
   const CATS = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Gelir', 'Abonelik', 'Birikim', 'Diğer'];
 
-  const today = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.');
+  const isoToTr = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
+  const isToday = date === new Date().toISOString().slice(0, 10);
+  const isPast  = date < new Date().toISOString().slice(0, 10);
 
   const handleSave = async () => {
     const amt = parseFloat(amount.replace(',', '.'));
@@ -1981,7 +1984,7 @@ function QuickAddModal({ onClose, onSave, T }) {
       cat: type === 'income' ? 'Gelir' : cat,
       catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || '#9CA3AF'),
       amount: type === 'income' ? amt : -amt,
-      date: today,
+      date: isoToTr(date),
     });
     setSaving(false);
     onClose();
@@ -2016,8 +2019,14 @@ function QuickAddModal({ onClose, onSave, T }) {
           </div>
         </div>}
         <div style={{ marginTop: 13 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tarih</div>
-          <div style={{ height: 42, border: `1px solid ${T.border}`, borderRadius: 10, background: T.surface2, display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 13, color: T.textSub }}>{today} — Bugün</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tarih</div>
+            <span style={{ fontSize: T.fs(11), fontWeight: 600, color: isToday ? T.success : isPast ? T.warning : T.primary }}>
+              {isToday ? '📅 Bugün' : isPast ? '⏮ Geçmiş' : '⏭ Gelecek'}
+            </span>
+          </div>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            style={{ width: '100%', height: 46, border: `1.5px solid ${isToday ? T.border : T.primary}`, borderRadius: 10, padding: '0 14px', fontSize: T.fs(14), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif", boxSizing: 'border-box' }} />
         </div>
         <button onClick={handleSave} disabled={saving || !amount}
           style={{ width: '100%', height: 52, background: saving || !amount ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: saving || !amount ? 'default' : 'pointer', boxShadow: saving || !amount ? 'none' : T.fab }}>
