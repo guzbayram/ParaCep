@@ -471,10 +471,10 @@ function DashboardScreen({ T, onNav }) {
   const savePct = Math.round(netSavings / DATA.income * 100);
   return <Scroller>
     {/* Hero Card */}
-    <div style={{ background: `linear-gradient(145deg, ${T.primary} 0%, ${T.primaryDark} 100%)`, color: '#fff', position: 'relative', overflow: 'hidden', textAlign: "center", fontWeight: "300", height: "40px", padding: "20px 20px 60px", margin: "0px 0px 21.997284px", borderStyle: "solid", borderWidth: "0px", borderRadius: "18px" }}>
+    <div style={{ background: `linear-gradient(145deg, ${T.primary} 0%, ${T.primaryDark} 100%)`, color: '#fff', position: 'relative', overflow: 'hidden', textAlign: 'center', height: '165px', padding: '5px 20px 16px', marginBottom: 12, borderRadius: '18px' }}>
       <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
       <div style={{ position: 'absolute', bottom: -30, right: 30, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,.05)' }} />
-      <div style={{ marginBottom: 3, fontWeight: 500, textAlign: "center", lineHeight: "1.4", fontSize: "1px", opacity: "7", padding: "0px", margin: "0px", borderRadius: "0px" }}>Net Bakiye · Nisan 2026</div>
+      <div style={{ marginBottom: 4, fontWeight: 500, textAlign: 'center', lineHeight: '1.4', fontSize: T.fs(12), opacity: .75 }}>Net Bakiye · {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}</div>
       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 30, fontWeight: 500, letterSpacing: '-.02em', textAlign: "center" }}>{fmt(DATA.balance)}</div>
       <div style={{ display: 'flex', gap: 16, marginTop: 14 }}>
         {[['+', DATA.income, 'Gelir'], ['-', DATA.expense, 'Gider']].map(([s, v, l]) =>
