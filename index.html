@@ -1794,7 +1794,7 @@ function AdminPanel({ T, db }) {
   );
 }
 
-function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, showTips, onToggleTips, user, isAdmin, onLogout, onExport, onDeleteData }) {
+function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, showTips, onToggleTips, user, isAdmin, onLogout, onExport, onExportCSV, onDeleteData }) {
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
@@ -1819,7 +1819,8 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
     { icon: '💱', label: 'Para Birimi', sub: 'TL (₺)' }]
   },
   { title: 'Veri', items: [
-    { icon: '📤', label: 'Veriyi Dışa Aktar', sub: 'JSON formatında indir', onTap: onExport },
+    { icon: '📤', label: 'Dışa Aktar — JSON', sub: 'Tüm veri, JSON formatında', onTap: onExport },
+    { icon: '📊', label: 'Dışa Aktar — CSV', sub: 'Google Tablolar / Excel formatında', onTap: onExportCSV },
     { icon: '🗑️', label: 'Tüm Veriyi Sil', sub: 'Geri alınamaz', danger: true, onTap: onDeleteData }]
   },
   { title: 'Hakkında', items: [
@@ -2685,6 +2686,50 @@ function App() {
     a.click(); URL.revokeObjectURL(a.href);
   };
 
+  const handleExportCSV = () => {
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const sections = [];
+
+    // İşlemler
+    sections.push('İŞLEMLER');
+    sections.push(['Tarih', 'Açıklama', 'Kategori', 'Tutar', 'Hesap'].map(esc).join(','));
+    DATA.transactions.forEach(t => {
+      const acc = DATA.accounts?.find(a => a.id === t.accountId);
+      sections.push([t.date, t.label, t.cat, t.amount, acc?.name || ''].map(esc).join(','));
+    });
+    sections.push('');
+
+    // Hesaplar
+    sections.push('HESAPLAR');
+    sections.push(['Hesap Adı', 'Tür', 'Bakiye'].map(esc).join(','));
+    (DATA.accounts || []).forEach(a => {
+      sections.push([a.name, a.type, a.balance].map(esc).join(','));
+    });
+    sections.push('');
+
+    // Kredi Kartları
+    sections.push('KREDİ KARTLARI');
+    sections.push(['Kart Adı', 'Limit', 'Borç', 'Son Ödeme'].map(esc).join(','));
+    DATA.cards.forEach(c => sections.push([c.name, c.limit, c.balance, c.due].map(esc).join(',')));
+    sections.push('');
+
+    // Krediler
+    sections.push('KREDİLER');
+    sections.push(['Kredi Adı', 'Banka', 'Aylık Taksit', 'Kalan Borç', 'Kalan Taksit'].map(esc).join(','));
+    DATA.loans.forEach(l => sections.push([l.name, l.bank, l.monthly, l.remaining, l.remaining_count].map(esc).join(',')));
+    sections.push('');
+
+    // Bütçeler
+    sections.push('BÜTÇELER');
+    sections.push(['Bütçe Adı', 'Tür', 'Limit/Hedef', 'Harcanan/Biriken'].map(esc).join(','));
+    DATA.budgets.forEach(b => sections.push([b.name, b.type === 'saving' ? 'Birikim' : 'Bütçe', b.type === 'saving' ? b.target : b.monthly, b.type === 'saving' ? b.saved : b.spent].map(esc).join(',')));
+
+    const bom = '﻿'; // UTF-8 BOM — Google Sheets Türkçe karakter desteği
+    const blob = new Blob([bom + sections.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'paracep-verilerim.csv' });
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+
   const handleDeleteData = async () => {
     if (!user || !window.confirm('Tüm işlem verileriniz silinecek. Bu işlem geri alınamaz!')) return;
     const uid = user.uid;
@@ -2716,7 +2761,7 @@ function App() {
         onFontScale={(key, scale) => { setFontScaleKey(key); setFontScale(scale); localStorage.setItem('pc_fskey', key); localStorage.setItem('pc_fs', scale); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ fontScaleKey: key }, { merge: true }); }}
         showTips={showTips}
         onToggleTips={() => { const n = !showTips; setShowTips(n); localStorage.setItem('pc_showTips', n); window.__setShowTips && window.__setShowTips(n); }}
-        user={user} isAdmin={isAdmin} onLogout={handleLogout} onExport={handleExport} onDeleteData={handleDeleteData} />;
+        user={user} isAdmin={isAdmin} onLogout={handleLogout} onExport={handleExport} onExportCSV={handleExportCSV} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
   };
