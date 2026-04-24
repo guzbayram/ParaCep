@@ -1650,7 +1650,7 @@ function AdminPanel({ T, db }) {
   );
 }
 
-function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, user, isAdmin, onLogout, onExport, onDeleteData }) {
+function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, showTips, onToggleTips, user, isAdmin, onLogout, onExport, onDeleteData }) {
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
@@ -1704,6 +1704,23 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
 
     {/* Admin Panel — sadece admin görür */}
     {isAdmin && <AdminPanel T={T} db={firebase.firestore()} />}
+
+    {/* Bilgi ikonları toggle */}
+    <div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Bilgi İkonları</div>
+      <Card T={T} style={{ padding: '14px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>Kart açıklamaları</div>
+            <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>Metrik kartlardaki ℹ ikonunu göster</div>
+          </div>
+          <button onClick={onToggleTips}
+            style={{ width: 46, height: 26, borderRadius: 13, background: showTips ? T.primary : T.border, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: showTips ? 23 : 3, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
+          </button>
+        </div>
+      </Card>
+    </div>
 
     {/* Font size picker */}
     <div>
@@ -2422,6 +2439,8 @@ function App() {
         onAccent={v => { setAccent(v); localStorage.setItem('pc_accent', v); window.__setAccent && window.__setAccent(v); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ accent: v }, { merge: true }); }}
         fontScaleKey={fontScaleKey}
         onFontScale={(key, scale) => { setFontScaleKey(key); setFontScale(scale); localStorage.setItem('pc_fskey', key); localStorage.setItem('pc_fs', scale); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ fontScaleKey: key }, { merge: true }); }}
+        showTips={showTips}
+        onToggleTips={() => { const n = !showTips; setShowTips(n); localStorage.setItem('pc_showTips', n); window.__setShowTips && window.__setShowTips(n); }}
         user={user} isAdmin={isAdmin} onLogout={handleLogout} onExport={handleExport} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
