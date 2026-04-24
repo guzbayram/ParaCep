@@ -1000,7 +1000,7 @@ function DebtTrackingCard({ T }) {
   // Aylık sabit gider/gelir net farkı
   const monthlyFixedIncome  = recurring.filter(r => r.amount > 0 && r.frequency === 'monthly').reduce((s, r) => s + r.amount, 0);
   const monthlyFixedExpense = recurring.filter(r => r.amount < 0 && r.frequency === 'monthly').reduce((s, r) => s + Math.abs(r.amount), 0);
-  const monthlyLoanPayment  = loans.reduce((s, l) => s + (l.monthly || 0), 0);
+  const monthlyLoanPayment  = loans.reduce((s, l) => s + (l.frequency === 'yearly' ? (l.monthly || 0) / 12 : (l.monthly || 0)), 0);
   const netMonthly = monthlyFixedIncome - monthlyFixedExpense - monthlyLoanPayment;
 
   // Önümüzdeki 12 ay borç projeksiyonu
@@ -1011,7 +1011,8 @@ function DebtTrackingCard({ T }) {
     const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
     const lbl = m === 0 ? 'Şimdi' : d.toLocaleDateString('tr-TR', { month: 'short', year: m > 11 ? '2-digit' : undefined });
     const loanDebt = loans.reduce((sum, l) => {
-      const rem = Math.max(0, (l.remaining_count || 0) - m);
+      const elapsed = l.frequency === 'yearly' ? Math.floor(m / 12) : m;
+      const rem = Math.max(0, (l.remaining_count || 0) - elapsed);
       return sum + (l.monthly || 0) * rem;
     }, 0);
     return { lbl, loanDebt, cardDebt: totalCardDebt, total: loanDebt + totalCardDebt };
