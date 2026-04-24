@@ -540,18 +540,7 @@ function DashboardScreen({ T, onNav }) {
       <div style={{ position: 'absolute', bottom: -30, right: 30, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,.05)' }} />
       <div style={{ marginBottom: 4, fontWeight: 500, textAlign: 'center', lineHeight: '1.4', fontSize: T.fs(12), opacity: .75 }}>Toplam Bakiye · {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}</div>
       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 30, fontWeight: 500, letterSpacing: '-.02em', textAlign: "center" }}>{fmt(DATA.balance)}</div>
-      {(DATA.accounts || []).length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {(DATA.accounts || []).map(a => (
-            <div key={a.id} style={{ background: 'rgba(255,255,255,.15)', borderRadius: 8, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ fontSize: 12 }}>{a.icon}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, opacity: .9 }}>{a.name}</span>
-              <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700 }}>{fmt(a.balance)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 14 }}>
         {[['+', DATA.income, 'Gelir'], ['-', DATA.expense, 'Gider']].map(([s, v, l]) =>
         <div key={l} style={{ background: 'rgba(255,255,255,.12)', borderRadius: 10, padding: '8px 12px', flex: 1 }}>
             <div style={{ fontSize: 10, opacity: .7, marginBottom: 3 }}>{l}</div>
