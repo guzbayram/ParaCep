@@ -86,17 +86,26 @@ body{background:#E8ECF0;min-height:100vh;display:flex;align-items:center;justify
       <button onclick="setChart('line')">Çizgi</button>
     </div>
   </div>
+  <div class="tweak-row">
+    <div class="tweak-label">Bilgi İkonları</div>
+    <div class="tweak-toggle" id="tips-toggle">
+      <button class="on" onclick="setShowTips(true)">Görünür</button>
+      <button onclick="setShowTips(false)">Gizli</button>
+    </div>
+  </div>
 </div>
 <script>
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "light",
   "accent": "purple",
-  "chartStyle": "line"
+  "chartStyle": "line",
+  "showTips": true
 }/*EDITMODE-END*/;
 let tweakState = {...TWEAK_DEFAULTS};
 function setTheme(v){tweakState.theme=v;updateTweakBtns('theme-toggle',v==='light'?0:1);window.__setTheme&&window.__setTheme(v);postEdit()}
 function setAccent(v){tweakState.accent=v;updateTweakBtns('accent-toggle',['green','purple','orange','rose','blue','teal'].indexOf(v));window.__setAccent&&window.__setAccent(v);postEdit()}
 function setChart(v){tweakState.chartStyle=v;updateTweakBtns('chart-toggle',v==='bar'?0:1);window.__setChart&&window.__setChart(v);postEdit()}
+function setShowTips(v){tweakState.showTips=v;updateTweakBtns('tips-toggle',v?0:1);window.__setShowTips&&window.__setShowTips(v);postEdit()}
 function updateTweakBtns(id,activeIdx){const btns=document.getElementById(id).querySelectorAll('button');btns.forEach((b,i)=>b.classList.toggle('on',i===activeIdx))}
 function postEdit(){window.parent.postMessage({type:'__edit_mode_set_keys',edits:tweakState},'*')}
 window.addEventListener('message',e=>{
@@ -982,8 +991,17 @@ function TransactionsScreen({ T }) {
 // ─── RAPORLAR ─────────────────────────────────────────────────────────────────
 function ReportsScreen({ T, chartStyle }) {
   const [period, setPeriod] = React.useState('6ay');
+  const [openTip, setOpenTip] = React.useState(null);
   const maxIncome = Math.max(...DATA.monthIncomes);
   const maxExpense = Math.max(...DATA.monthExpenses);
+  const savePct = DATA.income > 0 ? Math.round((DATA.income - DATA.expense) / DATA.income * 100) : 0;
+  const tipColors = [T.success, T.danger, T.success, T.success];
+  const tips = [
+    `Son dönemdeki tüm gelir işlemlerinin toplamı.\n\nGelir işlemleri "+" tutarlı kayıtlardır.`,
+    `Son dönemdeki tüm gider işlemlerinin toplamı.\n\nGider işlemleri "−" tutarlı kayıtlardır.`,
+    `Toplam Gelir − Toplam Gider.\n\n${fmt(DATA.income)} − ${fmt(DATA.expense)} = ${fmt(DATA.income - DATA.expense)}`,
+    `Net Tasarruf ÷ Toplam Gelir × 100.\n\n${fmt(DATA.income - DATA.expense)} ÷ ${fmt(DATA.income)} × 100 = %${savePct}`,
+  ];
   return <Scroller>
     {/* Summary cards */}
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -993,13 +1011,29 @@ function ReportsScreen({ T, chartStyle }) {
       ['Net Tasarruf', DATA.income - DATA.expense, 'income'],
       ['Tasarruf Oranı', null, 'neutral']].
       map(([lbl, val, type], i) =>
-      <Card key={i} T={T} style={{ padding: '12px 14px' }}>
-          <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>{lbl}</div>
+      <Card key={i} T={T} style={{ padding: '12px 14px', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: T.textSub }}>{lbl}</div>
+            {T.showTips && <button onClick={() => setOpenTip(openTip === i ? null : i)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: openTip === i ? tipColors[i] : T.textMut, flexShrink: 0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8" strokeLinecap="round" strokeWidth="3"/><line x1="12" y1="12" x2="12" y2="16"/>
+              </svg>
+            </button>}
+          </div>
           {i === 3 ?
-        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 500, color: T.success }}>%{Math.round((DATA.income - DATA.expense) / DATA.income * 100)}</div> :
-
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 16, fontWeight: 500, color: T.success }}>%{savePct}</div> :
         <MonoAmt value={val} type={type} size={15} />
         }
+        {openTip === i && T.showTips && (
+          <div onClick={() => setOpenTip(null)}
+            style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 6,
+              background: T.surface, border: `1px solid ${tipColors[i]}44`, borderRadius: 10,
+              padding: '10px 12px', boxShadow: '0 4px 16px rgba(0,0,0,.15)',
+              fontSize: T.fs(11), color: T.text, lineHeight: 1.55, whiteSpace: 'pre-line', cursor: 'pointer' }}>
+            {tips[i]}
+          </div>
+        )}
         </Card>
       )}
     </div>
@@ -1150,15 +1184,15 @@ function DebtTrackingCard({ T }) {
           <div key={lbl} style={{ background: T.surface2, borderRadius: 10, padding: '10px 12px', position: 'relative' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 }}>
               <div style={{ fontSize: T.fs(10), color: T.textSub, flex: 1, paddingRight: 4 }}>{lbl}</div>
-              <button onClick={() => setOpenTip(openTip === idx ? null : idx)}
+              {T.showTips && <button onClick={() => setOpenTip(openTip === idx ? null : idx)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: openTip === idx ? color : T.textMut, flexShrink: 0 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8" strokeLinecap="round" strokeWidth="3"/><line x1="12" y1="12" x2="12" y2="16"/>
                 </svg>
-              </button>
+              </button>}
             </div>
             <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700, color }}>{val}</div>
-            {openTip === idx && (
+            {openTip === idx && T.showTips && (
               <div onClick={() => setOpenTip(null)}
                 style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 6,
                   background: T.surface, border: `1px solid ${color}44`, borderRadius: 10,
@@ -2267,6 +2301,7 @@ function App() {
   const [theme, setTheme] = React.useState(() => localStorage.getItem('pc_theme') || 'light');
   const [accent, setAccent] = React.useState(() => localStorage.getItem('pc_accent') || 'purple');
   const [chartStyle, setChartStyle] = React.useState('bar');
+  const [showTips, setShowTips] = React.useState(() => localStorage.getItem('pc_showTips') !== 'false');
   const [fontScaleKey, setFontScaleKey] = React.useState(() => localStorage.getItem('pc_fskey') || 'm');
   const [fontScale, setFontScale]       = React.useState(() => parseFloat(localStorage.getItem('pc_fs')) || 1.0);
   const [isMobile, setIsMobile] = React.useState(() => window.matchMedia('(max-width: 600px)').matches);
@@ -2288,6 +2323,7 @@ function App() {
     window.__setTheme = v => { setTheme(v); localStorage.setItem('pc_theme', v); };
     window.__setAccent = v => { setAccent(v); localStorage.setItem('pc_accent', v); };
     window.__setChart = v => setChartStyle(v);
+    window.__setShowTips = v => { setShowTips(v); localStorage.setItem('pc_showTips', v); };
   }, []);
 
   // Auth state listener
@@ -2327,7 +2363,7 @@ function App() {
     return () => unsubs.forEach(u => u());
   }, [user]);
 
-  const T = makeTheme(theme, accent, fontScale);
+  const T = { ...makeTheme(theme, accent, fontScale), showTips };
 
   React.useEffect(() => {
     const tag = document.querySelector('meta[name="theme-color"]');
