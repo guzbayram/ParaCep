@@ -2405,7 +2405,7 @@ function QuickAddModal({ onClose, onSave, T }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{type === 'expense' ? 'Ödeme Hesabı' : 'Gelir Hesabı'}</div>
             {!accountId && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {(DATA.accounts || []).map(a => {
               const active = accountId === a.id;
               return (
@@ -2414,7 +2414,7 @@ function QuickAddModal({ onClose, onSave, T }) {
                     border: `1.5px solid ${active ? T.primary : T.border}`,
                     background: active ? T.primaryLight : T.surface2,
                     cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
-                    color: active ? T.primary : T.textSub, transition: 'all .15s' }}>
+                    color: active ? T.primary : T.textSub, transition: 'all .15s', width: '100%' }}>
                   <span>{a.icon}</span>
                   <span>{a.name}</span>
                   <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, opacity: .7 }}>{fmt(a.balance)}</span>
