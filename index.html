@@ -465,6 +465,43 @@ function AppHeader({ title, T, onSettings, onLogout, onReports, showNotif = true
   </div>;
 }
 
+// ─── YAKLAŞAN ÖDEMELER HESAPLA ────────────────────────────────────────────────
+function computeUpcoming() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const items = [];
+
+  const nextDate = (day) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), day);
+    if (d < now) d.setMonth(d.getMonth() + 1);
+    return d;
+  };
+  const daysLeft = (d) => Math.ceil((d - now) / 86400000);
+  const fmtDate  = (d) => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
+
+  // Krediler
+  (DATA.loans || []).filter(l => l.dueDay && l.remaining_count > 0).forEach(l => {
+    const d = nextDate(l.dueDay);
+    items.push({ label: l.name, date: fmtDate(d), amount: l.monthly, daysLeft: daysLeft(d), icon: '🏦', _ts: d.getTime() });
+  });
+
+  // Kredi kartları
+  (DATA.cards || []).forEach(c => {
+    const day = c.dueDay || (c.due ? parseInt(c.due.split('.')[0]) : 0);
+    if (!day || !c.balance) return;
+    const d = nextDate(day);
+    items.push({ label: c.name, date: fmtDate(d), amount: c.balance, daysLeft: daysLeft(d), icon: '💳', _ts: d.getTime() });
+  });
+
+  // Sabit aylık giderler
+  (DATA.recurring || []).filter(r => r.amount < 0 && r.frequency === 'monthly' && r.dayOfMonth).forEach(r => {
+    const d = nextDate(r.dayOfMonth);
+    items.push({ label: r.label, date: fmtDate(d), amount: Math.abs(r.amount), daysLeft: daysLeft(d), icon: '📋', _ts: d.getTime() });
+  });
+
+  return items.sort((a, b) => a._ts - b._ts).slice(0, 5);
+}
+
 // ─── ANA SAYFA ────────────────────────────────────────────────────────────────
 function DashboardScreen({ T, onNav }) {
   const netSavings = DATA.income - DATA.expense;
@@ -495,26 +532,37 @@ function DashboardScreen({ T, onNav }) {
     </div>
 
     {/* Upcoming Payments */}
-    <Card T={T}>
-      <div style={{ padding: '14px 14px 0' }}>
-        <SectionHdr title="Yaklaşan Ödemeler" action="Tümü" onAction={() => onNav('debts')} T={T} />
-      </div>
-      {DATA.upcoming.map((u, i) =>
-      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: i < DATA.upcoming.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: T.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{u.icon}</div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{u.label}</div>
-              <div style={{ fontSize: 11, color: T.textSub }}>{u.date}</div>
+    {(() => {
+      const upcoming = computeUpcoming();
+      return (
+        <Card T={T}>
+          <div style={{ padding: '14px 14px 0' }}>
+            <SectionHdr title="Yaklaşan Ödemeler" action="Tümü" onAction={() => onNav('debts')} T={T} />
+          </div>
+          {upcoming.length === 0 ? (
+            <div style={{ padding: '16px 14px', textAlign: 'center', color: T.textSub }}>
+              <div style={{ fontSize: 24, marginBottom: 6 }}>✅</div>
+              <div style={{ fontSize: T.fs(12) }}>Yaklaşan ödeme yok</div>
+              <div style={{ fontSize: T.fs(11), marginTop: 3 }}>Kredi/kart ödeme tarihi veya sabit gider ekleyin</div>
             </div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 13, fontWeight: 500, color: T.text }}>{fmt(u.amount)}</div>
-            <span style={{ display: 'inline-block', marginTop: 3, padding: '2px 7px', borderRadius: 9999, fontSize: 10, fontWeight: 700, background: u.daysLeft <= 5 ? '#FEF2F2' : '#FFFBEB', color: u.daysLeft <= 5 ? '#DC2626' : '#D97706' }}>{u.daysLeft} gün</span>
-          </div>
-        </div>
-      )}
-    </Card>
+          ) : upcoming.map((u, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: i < upcoming.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: T.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{u.icon}</div>
+                <div>
+                  <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{u.label}</div>
+                  <div style={{ fontSize: T.fs(11), color: T.textSub }}>{u.date}</div>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 500, color: T.text }}>{fmt(u.amount)}</div>
+                <span style={{ display: 'inline-block', marginTop: 3, padding: '2px 7px', borderRadius: 9999, fontSize: T.fs(10), fontWeight: 700, background: u.daysLeft <= 5 ? '#FEF2F2' : '#FFFBEB', color: u.daysLeft <= 5 ? '#DC2626' : '#D97706' }}>{u.daysLeft} gün</span>
+              </div>
+            </div>
+          ))}
+        </Card>
+      );
+    })()}
 
     {/* Budget summary */}
     <SectionHdr title="Bütçe & Birikimler" action="Tümü" onAction={() => onNav('budgets')} T={T} />
