@@ -1317,7 +1317,87 @@ const ACCENT_META = [
   { key: 'teal',   label: 'Turkuaz', color: '#0D9488' },
 ];
 
-function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, user, onLogout, onExport, onDeleteData }) {
+function AdminPanel({ T, db }) {
+  const [currentCode, setCurrentCode] = React.useState('');
+  const [newCode, setNewCode]         = React.useState('');
+  const [saving, setSaving]           = React.useState(false);
+  const [copied, setCopied]           = React.useState(false);
+  const [loading, setLoading]         = React.useState(true);
+
+  React.useEffect(() => {
+    db.doc('config/registration').get().then(doc => {
+      if (doc.exists) setCurrentCode(doc.data().inviteCode || '');
+      setLoading(false);
+    });
+  }, []);
+
+  const generateCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    setNewCode(Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''));
+  };
+
+  const saveCode = async () => {
+    const code = newCode.trim().toUpperCase();
+    if (!code) return;
+    setSaving(true);
+    await db.doc('config/registration').set({ inviteCode: code }, { merge: true });
+    setCurrentCode(code);
+    setNewCode('');
+    setSaving(false);
+  };
+
+  const copyCode = () => {
+    navigator.clipboard?.writeText(currentCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>🔐 Admin Paneli</div>
+      <Card T={T} style={{ padding: '16px 14px', border: `1.5px solid ${T.primary}` }}>
+        {/* Mevcut kod */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: T.fs(11), color: T.textSub, marginBottom: 6, fontWeight: 600 }}>Aktif Davet Kodu</div>
+          {loading ? (
+            <div style={{ fontSize: T.fs(13), color: T.textMut }}>Yükleniyor…</div>
+          ) : currentCode ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, fontFamily: "'DM Mono',monospace", fontSize: T.fs(20), fontWeight: 700, color: T.primary, letterSpacing: '.12em', background: T.primaryLight, padding: '10px 14px', borderRadius: 10 }}>
+                {currentCode}
+              </div>
+              <button onClick={copyCode} style={{ height: 44, padding: '0 14px', background: copied ? T.success : T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(12), fontWeight: 700, color: copied ? '#fff' : T.text, transition: 'all .2s' }}>
+                {copied ? '✓ Kopyalandı' : '📋 Kopyala'}
+              </button>
+            </div>
+          ) : (
+            <div style={{ fontSize: T.fs(13), color: T.warning, fontWeight: 600 }}>⚠️ Henüz kod ayarlanmamış</div>
+          )}
+        </div>
+
+        {/* Yeni kod */}
+        <div style={{ fontSize: T.fs(12), fontWeight: 600, color: T.text, marginBottom: 8 }}>Kodu Değiştir</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <input value={newCode} onChange={e => setNewCode(e.target.value.toUpperCase())} placeholder="Yeni kod gir…"
+            style={{ flex: 1, height: 44, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: '0 12px', fontSize: T.fs(15), fontFamily: "'DM Mono',monospace", fontWeight: 700, outline: 'none', background: T.surface, color: T.text, letterSpacing: '.1em' }}
+            onFocus={e => e.target.style.borderColor = T.primary}
+            onBlur={e => e.target.style.borderColor = T.border} />
+          <button onClick={generateCode} style={{ height: 44, padding: '0 12px', background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, cursor: 'pointer', fontSize: T.fs(20), whiteSpace: 'nowrap' }} title="Rastgele üret">🎲</button>
+        </div>
+        <button onClick={saveCode} disabled={saving || !newCode.trim()}
+          style={{ width: '100%', height: 46, background: saving || !newCode.trim() ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 10, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(14), fontWeight: 700, cursor: saving || !newCode.trim() ? 'default' : 'pointer', boxShadow: saving || !newCode.trim() ? 'none' : T.fab }}>
+          {saving ? 'Kaydediliyor…' : 'Kodu Güncelle'}
+        </button>
+        <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 10, textAlign: 'center' }}>
+          Bu kodu kayıt yaptıracağın kişiyle paylaş
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, user, isAdmin, onLogout, onExport, onDeleteData }) {
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
@@ -1368,6 +1448,9 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
         </button>
       </div>
     </Card>}
+
+    {/* Admin Panel — sadece admin görür */}
+    {isAdmin && <AdminPanel T={T} db={firebase.firestore()} />}
 
     {/* Font size picker */}
     <div>
@@ -2020,6 +2103,9 @@ function App() {
     }
   };
 
+  const ADMIN_EMAIL = 'guzbayram@gmail.com';
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
   const screenTitles = { home: 'Ana Sayfa', debts: 'Borçlar', txns: 'İşlemler', reports: 'Raporlar', budgets: 'Bütçe & Birikimler', settings: 'Ayarlar' };
 
   const renderScreen = () => {
@@ -2036,7 +2122,7 @@ function App() {
         onAccent={v => { setAccent(v); localStorage.setItem('pc_accent', v); window.__setAccent && window.__setAccent(v); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ accent: v }, { merge: true }); }}
         fontScaleKey={fontScaleKey}
         onFontScale={(key, scale) => { setFontScaleKey(key); setFontScale(scale); localStorage.setItem('pc_fskey', key); localStorage.setItem('pc_fs', scale); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ fontScaleKey: key }, { merge: true }); }}
-        user={user} onLogout={handleLogout} onExport={handleExport} onDeleteData={handleDeleteData} />;
+        user={user} isAdmin={isAdmin} onLogout={handleLogout} onExport={handleExport} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
   };
