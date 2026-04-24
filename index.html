@@ -207,7 +207,12 @@ const SEED_DATA = {
   { name: 'Mutfak Bütçesi', icon: '🛒', monthly: 2000, spent: 1248.90, color: '#F59E0B' },
   { name: 'Tatil Birikimi', icon: '✈️', target: 8000, saved: 3200, color: '#3B82F6', type: 'saving' },
   { name: 'Öğrenci Gid.', icon: '🎓', monthly: 1500, spent: 870, color: '#8B5CF6' },
-  { name: 'Acil Fon', icon: '🛡️', target: 20000, saved: 8500, color: '#059669', type: 'saving' }]
+  { name: 'Acil Fon', icon: '🛡️', target: 20000, saved: 8500, color: '#059669', type: 'saving' }],
+
+  accounts: [
+  { name: 'Nakit', icon: '💵', balance: 2000, color: '#059669', type: 'cash' },
+  { name: 'Ziraat Bankası', icon: '🏦', balance: 5500, color: '#1E3A5F', type: 'bank' },
+  { name: 'Garanti BBVA', icon: '🏦', balance: 740.50, color: '#7C3AED', type: 'bank' }]
 
 };
 
@@ -226,6 +231,7 @@ const CAT_COLORS = {
 
 function computeAppData(raw) {
   const txns = raw.transactions || [];
+  const accounts = raw.accounts || [];
   const income  = txns.filter(t => t.amount > 0).reduce((s,t) => s + t.amount, 0);
   const expense = txns.filter(t => t.amount < 0).reduce((s,t) => s + Math.abs(t.amount), 0);
   const balance = income - expense;
@@ -259,10 +265,14 @@ function computeAppData(raw) {
     .map(([name, { amt, color }]) => ({ name, amt, pct: totalExp ? Math.round(amt / totalExp * 100) : 0, color }))
     .sort((a, b) => b.amt - a.amt).slice(0, 5);
 
+  const accountsBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0);
+
   return {
     ...SEED_DATA,
     ...raw,
-    balance, income, expense,
+    accounts,
+    balance: accounts.length ? accountsBalance : balance,
+    income, expense,
     monthLabels: months.map(m => m.label),
     monthIncomes: months.map(m => m.income),
     monthExpenses: months.map(m => m.expense),
@@ -288,6 +298,7 @@ async function seedUserData(uid, name) {
   SEED_DATA.loans.forEach(l => batch.set(db.collection(`users/${uid}/loans`).doc(), l));
   SEED_DATA.budgets.forEach(b => batch.set(db.collection(`users/${uid}/budgets`).doc(), b));
   SEED_DATA.upcoming.forEach(u => batch.set(db.collection(`users/${uid}/upcoming`).doc(), u));
+  SEED_DATA.accounts.forEach(a => batch.set(db.collection(`users/${uid}/accounts`).doc(), a));
   await batch.commit();
 }
 
@@ -527,9 +538,20 @@ function DashboardScreen({ T, onNav }) {
     <div style={{ background: `linear-gradient(145deg, ${T.primary} 0%, ${T.primaryDark} 100%)`, color: '#fff', position: 'relative', overflow: 'hidden', textAlign: 'center', flexShrink: 0, padding: '10px 20px 10px', marginBottom: 12, borderRadius: '18px' }}>
       <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,.07)' }} />
       <div style={{ position: 'absolute', bottom: -30, right: 30, width: 70, height: 70, borderRadius: '50%', background: 'rgba(255,255,255,.05)' }} />
-      <div style={{ marginBottom: 4, fontWeight: 500, textAlign: 'center', lineHeight: '1.4', fontSize: T.fs(12), opacity: .75 }}>Net Bakiye · {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}</div>
+      <div style={{ marginBottom: 4, fontWeight: 500, textAlign: 'center', lineHeight: '1.4', fontSize: T.fs(12), opacity: .75 }}>Toplam Bakiye · {new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}</div>
       <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 30, fontWeight: 500, letterSpacing: '-.02em', textAlign: "center" }}>{fmt(DATA.balance)}</div>
-      <div style={{ display: 'flex', gap: 16, marginTop: 14 }}>
+      {(DATA.accounts || []).length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {(DATA.accounts || []).map(a => (
+            <div key={a.id} style={{ background: 'rgba(255,255,255,.15)', borderRadius: 8, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 12 }}>{a.icon}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, opacity: .9 }}>{a.name}</span>
+              <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, fontWeight: 700 }}>{fmt(a.balance)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
         {[['+', DATA.income, 'Gelir'], ['-', DATA.expense, 'Gider']].map(([s, v, l]) =>
         <div key={l} style={{ background: 'rgba(255,255,255,.12)', borderRadius: 10, padding: '8px 12px', flex: 1 }}>
             <div style={{ fontSize: 10, opacity: .7, marginBottom: 3 }}>{l}</div>
@@ -2225,6 +2247,7 @@ function QuickAddModal({ onClose, onSave, T }) {
   const [label, setLabel] = React.useState('');
   const [cat, setCat] = React.useState(null);
   const [linkedBudgetId, setLinkedBudgetId] = React.useState(null);
+  const [accountId, setAccountId] = React.useState(() => (DATA.accounts || [])[0]?.id || null);
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = React.useState(false);
   const BASE_CATS = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Abonelik', 'Birikim', 'Diğer'];
@@ -2242,6 +2265,7 @@ function QuickAddModal({ onClose, onSave, T }) {
     const amt = parseFloat(amount.replace(',', '.'));
     if (!amt || amt <= 0) return;
     if (type === 'expense' && !cat) return;
+    if (!accountId) return;
     setSaving(true);
     await onSave({
       label: label.trim() || cat,
@@ -2249,6 +2273,7 @@ function QuickAddModal({ onClose, onSave, T }) {
       catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || '#9CA3AF'),
       amount: type === 'income' ? amt : -amt,
       date: isoToTr(date),
+      accountId,
       ...(linkedBudgetId ? { linkedBudgetId } : {}),
     });
     setSaving(false);
@@ -2273,8 +2298,31 @@ function QuickAddModal({ onClose, onSave, T }) {
           </div>
         </div>
         <div style={{ marginTop: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{type === 'expense' ? 'Ödeme Hesabı' : 'Gelir Hesabı'}</div>
+            {!accountId && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(DATA.accounts || []).map(a => {
+              const active = accountId === a.id;
+              return (
+                <button key={a.id} onClick={() => setAccountId(a.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 10,
+                    border: `1.5px solid ${active ? T.primary : T.border}`,
+                    background: active ? T.primaryLight : T.surface2,
+                    cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                    color: active ? T.primary : T.textSub, transition: 'all .15s' }}>
+                  <span>{a.icon}</span>
+                  <span>{a.name}</span>
+                  <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, opacity: .7 }}>{fmt(a.balance)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ marginTop: 13 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Açıklama (isteğe bağlı)</div>
-          <input value={label} onChange={e => setLabel(e.target.value)} placeholder={cat}
+          <input value={label} onChange={e => setLabel(e.target.value)} placeholder={cat || 'Açıklama'}
             style={{ width: '100%', height: 42, border: `1px solid ${T.border}`, borderRadius: 10, padding: '0 14px', fontSize: 13, outline: 'none', background: T.surface2, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
         </div>
         {type === 'expense' && <div style={{ marginTop: 13 }}>
@@ -2301,8 +2349,8 @@ function QuickAddModal({ onClose, onSave, T }) {
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
             style={{ width: '100%', height: 46, border: `1.5px solid ${isToday ? T.border : T.primary}`, borderRadius: 10, padding: '0 14px', fontSize: T.fs(14), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif", boxSizing: 'border-box' }} />
         </div>
-        <button onClick={handleSave} disabled={saving || !amount || (type === 'expense' && !cat)}
-          style={{ width: '100%', height: 52, background: (saving || !amount || (type === 'expense' && !cat)) ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: (saving || !amount || (type === 'expense' && !cat)) ? 'default' : 'pointer', boxShadow: (saving || !amount || (type === 'expense' && !cat)) ? 'none' : T.fab }}>
+        <button onClick={handleSave} disabled={saving || !amount || (type === 'expense' && !cat) || !accountId}
+          style={{ width: '100%', height: 52, background: (saving || !amount || (type === 'expense' && !cat) || !accountId) ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: (saving || !amount || (type === 'expense' && !cat) || !accountId) ? 'default' : 'pointer', boxShadow: (saving || !amount || (type === 'expense' && !cat) || !accountId) ? 'none' : T.fab }}>
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
       </div>
@@ -2381,6 +2429,7 @@ function App() {
       db.collection(`users/${uid}/budgets`).onSnapshot(s => refresh('budgets', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/upcoming`).onSnapshot(s => refresh('upcoming', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/recurring`).onSnapshot(s => refresh('recurring', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/accounts`).onSnapshot(s => refresh('accounts', s.docs.map(d => ({ id: d.id, ...d.data() })))),
     ];
     // Load saved theme/accent
     db.doc(`users/${uid}/meta/profile`).get().then(doc => {
@@ -2413,14 +2462,22 @@ function App() {
 
   const saveTransaction = async txData => {
     if (!user) return;
-    const { linkedBudgetId, ...tx } = txData;
-    await db.collection(`users/${user.uid}/transactions`).add({ ...tx, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    const { linkedBudgetId, accountId, ...tx } = txData;
+    await db.collection(`users/${user.uid}/transactions`).add({ ...tx, accountId: accountId || null, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    // Hesap bakiyesini güncelle
+    if (accountId) {
+      const account = DATA.accounts.find(a => a.id === accountId);
+      if (account) {
+        const newBal = (account.balance || 0) + txData.amount; // amount pozitif=gelir, negatif=gider
+        await db.collection(`users/${user.uid}/accounts`).doc(accountId).update({ balance: newBal });
+      }
+    }
+    // Bütçeyi güncelle
     if (linkedBudgetId) {
       const budget = DATA.budgets.find(b => b.id === linkedBudgetId);
       if (budget) {
         const field = budget.type === 'saving' ? 'saved' : 'spent';
-        const delta = budget.type === 'saving' ? Math.abs(txData.amount) : Math.abs(txData.amount);
-        const newVal = Math.max(0, (budget[field] || 0) + delta);
+        const newVal = Math.max(0, (budget[field] || 0) + Math.abs(txData.amount));
         await db.collection(`users/${user.uid}/budgets`).doc(linkedBudgetId).update({ [field]: newVal });
       }
     }
