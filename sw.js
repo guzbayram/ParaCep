@@ -1,4 +1,4 @@
-const CACHE = 'paracep-v1';
+const CACHE = 'paracep-v2';
 const BASE = '/ParaCep';
 
 const PRECACHE = [
