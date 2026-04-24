@@ -2003,7 +2003,7 @@ function AddAccountModal({ onClose, T, existing }) {
       <FField label="Hesap Adı" value={name} onChange={setName} placeholder="Ziraat Bankası" T={T} />
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Hesap Türü</div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
           {ACCOUNT_TYPES.map(t => {
             const active = typeKey === t.key;
             return (
@@ -2022,7 +2022,7 @@ function AddAccountModal({ onClose, T, existing }) {
       <FField label="Mevcut Bakiye (₺)" value={balance} onChange={setBalance} type="number" inputMode="decimal" placeholder="0,00" prefix="₺" T={T} />
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Renk</div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
           {ACCOUNT_COLORS.map((c, i) => (
             <button key={i} onClick={() => setColorIdx(i)}
               style={{ width: 32, height: 32, borderRadius: '50%', background: c, border: colorIdx === i ? `3px solid ${T.text}` : '3px solid transparent', cursor: 'pointer' }} />
