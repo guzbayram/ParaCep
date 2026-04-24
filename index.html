@@ -2223,13 +2223,16 @@ function QuickAddModal({ onClose, onSave, T }) {
   const [type, setType] = React.useState('expense');
   const [amount, setAmount] = React.useState('');
   const [label, setLabel] = React.useState('');
-  const [cat, setCat] = React.useState('Mutfak');
+  const [cat, setCat] = React.useState(null);
   const [linkedBudgetId, setLinkedBudgetId] = React.useState(null);
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = React.useState(false);
-  const CATS = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Gelir', 'Abonelik', 'Birikim', 'Diğer'];
+  const BASE_CATS = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Abonelik', 'Birikim', 'Diğer'];
   const spendingBudgets = (DATA.budgets || []).filter(b => b.type !== 'saving');
   const savingBudgets   = (DATA.budgets || []).filter(b => b.type === 'saving');
+  // Bütçe isimlerini base kategorilerden çıkar (çakışma olmasın), sonra birleştir
+  const budgetCatNames = new Set(spendingBudgets.map(b => b.name));
+  const baseCatsFiltered = BASE_CATS.filter(c => !budgetCatNames.has(c));
 
   const isoToTr = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
   const isToday = date === new Date().toISOString().slice(0, 10);
@@ -2238,6 +2241,7 @@ function QuickAddModal({ onClose, onSave, T }) {
   const handleSave = async () => {
     const amt = parseFloat(amount.replace(',', '.'));
     if (!amt || amt <= 0) return;
+    if (type === 'expense' && !cat) return;
     setSaving(true);
     await onSave({
       label: label.trim() || cat,
@@ -2258,7 +2262,7 @@ function QuickAddModal({ onClose, onSave, T }) {
         <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, textAlign: 'center', padding: '14px 0 12px', borderBottom: `1px solid ${T.border}` }}>İşlem Ekle</div>
         <div style={{ marginTop: 14 }}>
-          <SegControl tabs={[['expense', 'Gider'], ['income', 'Gelir']]} active={type} onChange={v => { setType(v); setLinkedBudgetId(null); if (v === 'income') setCat('Gelir'); else setCat('Mutfak'); }} T={T} />
+          <SegControl tabs={[['expense', 'Gider'], ['income', 'Gelir']]} active={type} onChange={v => { setType(v); setLinkedBudgetId(null); setCat(v === 'income' ? 'Gelir' : null); }} T={T} />
         </div>
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tutar</div>
@@ -2274,24 +2278,16 @@ function QuickAddModal({ onClose, onSave, T }) {
             style={{ width: '100%', height: 42, border: `1px solid ${T.border}`, borderRadius: 10, padding: '0 14px', fontSize: 13, outline: 'none', background: T.surface2, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
         </div>
         {type === 'expense' && <div style={{ marginTop: 13 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {CATS.filter(c => c !== 'Gelir').map(c => <Pill key={c} label={c} active={cat === c && !linkedBudgetId} onClick={() => { setCat(c); setLinkedBudgetId(null); }} T={T} />)}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
+            {!cat && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
           </div>
-          {spendingBudgets.length > 0 && <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, margin: '10px 0 7px', textTransform: 'uppercase', letterSpacing: '.05em' }}>Bütçeden Düş</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {spendingBudgets.map(b => (
-                <Pill key={b.id} label={`${b.icon || ''} ${b.name}`} active={linkedBudgetId === b.id} onClick={() => { setCat(b.name); setLinkedBudgetId(b.id); }} T={T} />
-              ))}
-            </div>
-          </>}
-        </div>}
-        {type === 'income' && savingBudgets.length > 0 && <div style={{ marginTop: 13 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Birikime Ekle (opsiyonel)</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {savingBudgets.map(b => (
-              <Pill key={b.id} label={`${b.icon || ''} ${b.name}`} active={linkedBudgetId === b.id} onClick={() => setLinkedBudgetId(linkedBudgetId === b.id ? null : b.id)} T={T} />
+            {spendingBudgets.map(b => (
+              <Pill key={b.id} label={`${b.icon ? b.icon + ' ' : ''}${b.name}`} active={linkedBudgetId === b.id} onClick={() => { setCat(b.name); setLinkedBudgetId(b.id); }} T={T} />
+            ))}
+            {baseCatsFiltered.map(c => (
+              <Pill key={c} label={c} active={cat === c && !linkedBudgetId} onClick={() => { setCat(c); setLinkedBudgetId(null); }} T={T} />
             ))}
           </div>
         </div>}
@@ -2305,8 +2301,8 @@ function QuickAddModal({ onClose, onSave, T }) {
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
             style={{ width: '100%', height: 46, border: `1.5px solid ${isToday ? T.border : T.primary}`, borderRadius: 10, padding: '0 14px', fontSize: T.fs(14), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif", boxSizing: 'border-box' }} />
         </div>
-        <button onClick={handleSave} disabled={saving || !amount}
-          style={{ width: '100%', height: 52, background: saving || !amount ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: saving || !amount ? 'default' : 'pointer', boxShadow: saving || !amount ? 'none' : T.fab }}>
+        <button onClick={handleSave} disabled={saving || !amount || (type === 'expense' && !cat)}
+          style={{ width: '100%', height: 52, background: (saving || !amount || (type === 'expense' && !cat)) ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: (saving || !amount || (type === 'expense' && !cat)) ? 'default' : 'pointer', boxShadow: (saving || !amount || (type === 'expense' && !cat)) ? 'none' : T.fab }}>
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
       </div>
