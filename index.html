@@ -2491,16 +2491,18 @@ function QuickAddModal({ onClose, onSave, T }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{type === 'expense' ? 'Ödeme Hesabı' : 'Gelir Hesabı'}</div>
             {!accountId && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-            {(DATA.accounts || []).map(a => {
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {(DATA.accounts || []).map((a, idx, arr) => {
               const active = accountId === a.id;
+              const isLastOdd = arr.length % 2 !== 0 && idx === arr.length - 1;
               return (
                 <button key={a.id} onClick={() => setAccountId(a.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 10,
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px 12px', borderRadius: 10,
                     border: `1.5px solid ${active ? T.primary : T.border}`,
                     background: active ? T.primaryLight : T.surface2,
                     cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
-                    color: active ? T.primary : T.textSub, transition: 'all .15s' }}>
+                    color: active ? T.primary : T.textSub, transition: 'all .15s',
+                    ...(isLastOdd ? { gridColumn: '1 / -1', width: '50%', margin: '0 auto' } : {}) }}>
                   <span>{a.icon}</span>
                   <span>{a.name}</span>
                   <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, opacity: .7 }}>{fmt(a.balance)}</span>
