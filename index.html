@@ -3232,6 +3232,28 @@ function App() {
       db.collection(`users/${uid}/categories`).onSnapshot(s => refresh('categories', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/incomeTypes`).onSnapshot(s => refresh('incomeTypes', s.docs.map(d => ({ id: d.id, ...d.data() })))),
     ];
+    // Migrasyon: incomeTypes yoksa varsayılanları ekle
+    db.collection(`users/${uid}/incomeTypes`).limit(1).get().then(snap => {
+      if (snap.empty) {
+        const batch = db.batch();
+        [{ label:'💼 Maaş', key:'salary' },{ label:'🖥 Freelance', key:'freelance' },
+         { label:'🏠 Kira', key:'rent' },{ label:'🌾 Hasat', key:'harvest' },{ label:'📦 Diğer', key:'other' }]
+          .forEach(t => batch.set(db.collection(`users/${uid}/incomeTypes`).doc(), t));
+        batch.commit();
+      }
+    });
+    // Migrasyon: categories yoksa varsayılanları ekle
+    db.collection(`users/${uid}/categories`).limit(1).get().then(snap => {
+      if (snap.empty) {
+        const batch = db.batch();
+        [{ name:'Mutfak', color:'#F59E0B' },{ name:'Ulaşım', color:'#8B5CF6' },
+         { name:'Sağlık', color:'#10B981' },{ name:'Giyim', color:'#EC4899' },
+         { name:'Ev Giderleri', color:'#3B82F6' },{ name:'Abonelik', color:'#EF4444' },
+         { name:'Birikim', color:'#6366F1' },{ name:'Diğer', color:'#9CA3AF' }]
+          .forEach(c => batch.set(db.collection(`users/${uid}/categories`).doc(), c));
+        batch.commit();
+      }
+    });
     // Load saved theme/accent
     db.doc(`users/${uid}/meta/profile`).get().then(doc => {
       if (!doc.exists) return;
