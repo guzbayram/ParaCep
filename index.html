@@ -2033,7 +2033,12 @@ function AddCardModal({ onClose, T, existing }) {
   const [limit, setLimit]     = React.useState(existing?.limit ? String(existing.limit) : '');
   const [balance, setBalance] = React.useState(existing?.balance ? String(existing.balance) : '');
   const [dueDay, setDueDay]   = React.useState(existing?.dueDay ? String(existing.dueDay) : existing?.due ? existing.due.split('.')[0] : '');
-  const [monthlyPayment, setMonthlyPayment] = React.useState(existing?.monthlyPayment ? String(existing.monthlyPayment) : '');
+  const [monthlyPayment, setMonthlyPayment] = React.useState(() => {
+    if (existing?.monthlyPayment) return String(existing.monthlyPayment);
+    if (existing?.balance) return String(Math.round(existing.balance * 0.4));
+    return '';
+  });
+  const autoPayment = bal => setMonthlyPayment(bal ? String(Math.round(parseFloat(bal) * 0.4)) : '');
   const CARD_COLORS = ['#7C3AED','#1E3A5F','#059669','#DC2626','#F97316','#0D9488'];
   const [colorIdx, setColorIdx] = React.useState(CARD_COLORS.indexOf(existing?.color) >= 0 ? CARD_COLORS.indexOf(existing.color) : 0);
   const [saving, setSaving] = React.useState(false);
@@ -2061,9 +2066,19 @@ function AddCardModal({ onClose, T, existing }) {
     <BottomSheet title={existing ? 'Kartı Düzenle' : 'Yeni Kart Ekle'} onClose={onClose} T={T}>
       <FField label="Kart Adı" value={name} onChange={setName} placeholder="Garanti BBVA" T={T} />
       <FField label="Limit (₺)" value={limit} onChange={setLimit} type="number" inputMode="numeric" placeholder="15000" prefix="₺" T={T} />
-      <FField label="Mevcut Borç (₺)" value={balance} onChange={setBalance} type="number" inputMode="numeric" placeholder="4250" prefix="₺" T={T} />
+      <FField label="Mevcut Borç (₺)" value={balance} onChange={v => { setBalance(v); autoPayment(v); }} type="number" inputMode="numeric" placeholder="4250" prefix="₺" T={T} />
       <FField label="Son Ödeme Günü (1-31)" value={dueDay} onChange={setDueDay} type="number" inputMode="numeric" placeholder="27" T={T} />
-      <FField label="Aylık Ödeme Planı (opsiyonel)" value={monthlyPayment} onChange={setMonthlyPayment} type="number" inputMode="numeric" placeholder="2000" prefix="₺" T={T} />
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>Aylık Ödeme Planı</div>
+          <button onClick={() => autoPayment(balance)} style={{ background: T.primaryLight, border: 'none', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 700, color: T.primary, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>%40 Otomatik</button>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontFamily: "'DM Mono',monospace", fontSize: 14, color: T.textSub }}>₺</span>
+          <input value={monthlyPayment} onChange={e => setMonthlyPayment(e.target.value)} type="number" inputMode="numeric" placeholder="0"
+            style={{ width: '100%', height: 44, border: `1px solid ${T.border}`, borderRadius: 10, padding: '0 12px 0 28px', fontSize: 13, fontFamily: "'DM Mono',monospace", fontWeight: 500, outline: 'none', background: T.surface2, color: T.text }} />
+        </div>
+      </div>
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kart Rengi</div>
         <div style={{ display: 'flex', gap: 10 }}>
