@@ -3322,7 +3322,7 @@ function App() {
   const [accent, setAccent] = React.useState(() => localStorage.getItem('pc_accent') || 'purple');
   const [chartStyle, setChartStyle] = React.useState('bar');
   const [showTips, setShowTips] = React.useState(() => localStorage.getItem('pc_showTips') !== 'false');
-  const [useTestData, setUseTestData] = React.useState(() => localStorage.getItem('pc_testData') === 'true');
+  const [useTestData, setUseTestData] = React.useState(false);
   const [fontScaleKey, setFontScaleKey] = React.useState(() => localStorage.getItem('pc_fskey') || 'm');
   const [fontScale, setFontScale]       = React.useState(() => parseFloat(localStorage.getItem('pc_fs')) || 1.0);
   const [isMobile, setIsMobile] = React.useState(() => window.matchMedia('(max-width: 600px)').matches);
@@ -3559,7 +3559,7 @@ function App() {
         showTips={showTips}
         onToggleTips={() => { const n = !showTips; setShowTips(n); localStorage.setItem('pc_showTips', n); window.__setShowTips && window.__setShowTips(n); }}
         useTestData={useTestData}
-        onToggleTestData={() => { const n = !useTestData; setUseTestData(n); localStorage.setItem('pc_testData', n); }}
+        onToggleTestData={() => setUseTestData(n => !n)}
         user={user} isAdmin={isAdmin} onLogout={handleLogout} onExport={handleExport} onExportCSV={handleExportCSV} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
