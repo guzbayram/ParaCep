@@ -223,6 +223,7 @@ let DATA = { ...SEED_DATA };
 const fmt = (v) => `₺${Math.abs(v).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
 const fmtK = (v) => v >= 1000 ? `₺${(v / 1000).toLocaleString('tr-TR', { minimumFractionDigits: 0 })}B` : fmt(v);
 
+const MONTHS_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const CAT_COLORS = {
   'Mutfak': '#F59E0B', 'Ulaşım': '#8B5CF6', 'Sağlık': '#10B981',
   'Giyim': '#EC4899', 'Ev Giderleri': '#3B82F6', 'Gelir': '#059669',
@@ -540,6 +541,40 @@ function computeUpcoming() {
 }
 
 // ─── ANA SAYFA ────────────────────────────────────────────────────────────────
+function NetWorthWidget({ T }) {
+  const totalAssets = (DATA.accounts || []).reduce((s, a) => s + (a.balance || 0), 0);
+  const totalCardDebt = (DATA.cards || []).reduce((s, c) => s + (c.balance || 0), 0);
+  const totalLoanDebt = (DATA.loans || []).reduce((s, l) => s + (l.remaining !== undefined ? l.remaining : (l.monthly || 0) * (l.remaining_count || 0)), 0);
+  const totalDebt = totalCardDebt + totalLoanDebt;
+  const netWorth = totalAssets - totalDebt;
+  const isPos = netWorth >= 0;
+  const coverPct = totalAssets + totalDebt > 0 ? Math.round(totalAssets / (totalAssets + totalDebt) * 100) : 50;
+  return (
+    <Card T={T} style={{ padding: '12px 14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 2 }}>Toplam Varlık</div>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700, color: T.success }}>{fmt(totalAssets)}</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: T.fs(9), color: T.textSub, marginBottom: 2 }}>Net Değer</div>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(15), fontWeight: 800, color: isPos ? T.success : T.danger }}>
+            {isPos ? '↑' : '↓'} {fmt(Math.abs(netWorth))}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 2 }}>Toplam Borç</div>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700, color: T.danger }}>{fmt(totalDebt)}</div>
+        </div>
+      </div>
+      <div style={{ height: 4, background: T.surface2, borderRadius: 9999, overflow: 'hidden' }}>
+        <div style={{ width: `${coverPct}%`, height: '100%', background: isPos ? T.success : T.danger, borderRadius: 9999, transition: 'width .4s' }} />
+      </div>
+      <div style={{ fontSize: T.fs(9), color: T.textSub, marginTop: 4, textAlign: 'center' }}>Varlık / (Varlık + Borç) oranı %{coverPct}</div>
+    </Card>
+  );
+}
+
 function DashboardScreen({ T, onNav }) {
   const netSavings = DATA.income - DATA.expense;
   const savePct = Math.round(netSavings / DATA.income * 100);
@@ -567,6 +602,8 @@ function DashboardScreen({ T, onNav }) {
         </div>
       </div>
     </div>
+
+    <NetWorthWidget T={T} />
 
     {/* Upcoming Payments */}
     {(() => {
@@ -632,6 +669,8 @@ function DebtsScreen({ T }) {
   const [modal, setModal] = React.useState(null);
   const [editing, setEditing] = React.useState(null);
   const [payItem, setPayItem] = React.useState(null); // { type:'card'|'loan', item }
+  const [loanView, setLoanView] = React.useState('list');
+  const now = new Date();
 
   const totalCard = DATA.cards.reduce((s, c) => s + (c.balance || 0), 0);
   const totalLoan = DATA.loans.reduce((s, l) => s + (l.remaining || 0), 0);
@@ -756,8 +795,22 @@ function DebtsScreen({ T }) {
             ))}
           </div>}
         </div>
-        {DATA.loans.map((l, i) => {
-          const rc = l.remaining_count || 0;
+        <SegControl tabs={[['list','📋 Liste'],['priority','🎯 Öncelik']]} active={loanView} onChange={setLoanView} T={T} />
+        {loanView === 'priority' && (
+          <div style={{ padding: '8px 12px', background: T.warningBg, borderRadius: 8, fontSize: T.fs(11), color: T.warning, fontWeight: 600 }}>
+            ⚡ Çığ Yöntemi: En uzun süren borç en üstte — önce onu kapatmak toplam faizi düşürür.
+          </div>
+        )}
+        {(() => {
+          const displayLoans = loanView === 'priority'
+            ? [...DATA.loans].sort((a, b) => {
+                const aM = a.frequency === 'yearly' ? (a.remaining_count||0)*12 : (a.remaining_count||0);
+                const bM = b.frequency === 'yearly' ? (b.remaining_count||0)*12 : (b.remaining_count||0);
+                return bM - aM;
+              })
+            : DATA.loans;
+          return displayLoans.map((l, i) => {
+        const rc = l.remaining_count || 0;
           const inst = l.installments || 0;
           const remaining = l.remaining !== undefined ? l.remaining : (l.monthly || 0) * rc;
           const totalPaidC = l.totalPaid !== undefined ? l.totalPaid : (l.monthly || 0) * (inst - rc);
@@ -805,9 +858,28 @@ function DebtsScreen({ T }) {
                   </button>}
                   {rc === 0 && <span style={{ fontSize: T.fs(11), fontWeight: 700, color: T.success }}>🎉 Tamamlandı</span>}
                 </div>
+                {loanView === 'priority' && rc > 0 && (() => {
+                  const monthsLeft = l.frequency === 'yearly' ? rc * 12 : rc;
+                  const payoffDate = new Date(now.getFullYear(), now.getMonth() + monthsLeft, 1);
+                  const payoffLabel = payoffDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+                  const urgency = monthsLeft > 36 ? T.danger : monthsLeft > 12 ? T.warning : T.success;
+                  const priorityIdx = [...DATA.loans].sort((a,b)=>{const aM=a.frequency==='yearly'?(a.remaining_count||0)*12:(a.remaining_count||0);const bM=b.frequency==='yearly'?(b.remaining_count||0)*12:(b.remaining_count||0);return bM-aM;}).indexOf(l);
+                  return (
+                    <div style={{ marginTop: 8, padding: '8px 10px', background: urgency + '18', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: T.fs(10), color: T.textSub }}>Tahmini Bitiş</div>
+                        <div style={{ fontSize: T.fs(12), fontWeight: 700, color: urgency }}>{payoffLabel}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: T.fs(10), color: T.textSub }}>Öncelik Sırası</div>
+                        <div style={{ fontSize: T.fs(16), fontWeight: 800, color: urgency }}>#{priorityIdx + 1}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </Card>);
-        })}
+        });})()}
         <button onClick={() => setModal('loan')} style={{ width: '100%', padding: '12px 0', borderRadius: 12, background: '#F3F4F6', border: '1.5px dashed #6B7280', color: '#374151', fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Yeni Kredi Ekle</button>
       </>}
     </Scroller>
@@ -1271,6 +1343,7 @@ function DebtTrackingCard({ T }) {
   const cards = DATA.cards || [];
   const recurring = DATA.recurring || [];
   const [openTip, setOpenTip] = React.useState(null);
+  const [showSchedule, setShowSchedule] = React.useState(false);
   React.useEffect(() => { setOpenTip(null); }, [T.showTips]);
 
   // Aylık sabit gider/gelir net farkı
@@ -1311,7 +1384,33 @@ function DebtTrackingCard({ T }) {
   const reduction  = totalNow - total12;
   const pctChange  = totalNow > 0 ? Math.round(reduction / totalNow * 100) : 0;
 
-  // Borç özgürlük ayı tahmini
+  // Gerçek borç özgürlük tarihi (120 aya kadar)
+  const extProjection = Array.from({ length: 121 }, (_, m) => {
+    const loanDebt = loans.reduce((sum, l) => {
+      const elapsed = l.frequency === 'yearly' ? Math.floor(m / 12) : m;
+      const rem = Math.max(0, (l.remaining_count || 0) - elapsed);
+      return sum + (l.monthly || 0) * rem;
+    }, 0);
+    const cardDebt = cards.reduce((sum, c) => sum + Math.max(0, (c.balance || 0) - (c.monthlyPayment || 0) * m), 0);
+    return loanDebt + cardDebt;
+  });
+  const realFreeIdx = extProjection.findIndex(v => v === 0);
+  const debtFreeLabel = realFreeIdx > 0 ? (() => {
+    const yrs = Math.floor(realFreeIdx / 12), mos = realFreeIdx % 12;
+    const d = new Date(now.getFullYear(), now.getMonth() + realFreeIdx, 1);
+    return {
+      dateStr: d.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }),
+      durationStr: yrs > 0 ? `${yrs} yıl${mos > 0 ? ` ${mos} ay` : ''} sonra` : `${mos} ay sonra`,
+    };
+  })() : null;
+
+  const loanSchedule = [...loans].map(l => {
+    const m = l.frequency === 'yearly' ? (l.remaining_count || 0) * 12 : (l.remaining_count || 0);
+    const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
+    return { name: l.name, bank: l.bank, monthsLeft: m, payoffLabel: d.toLocaleDateString('tr-TR', { month: 'short', year: 'numeric' }), remaining: l.remaining || (l.monthly || 0) * (l.remaining_count || 0) };
+  }).sort((a, b) => b.monthsLeft - a.monthsLeft);
+
+  const debtBurdenPct = monthlyFixedIncome > 0 ? Math.round((monthlyLoanPayment + monthlyCardPayment) / monthlyFixedIncome * 100) : null;
   const loanFreeMonth = projection.findIndex(p => p.loanDebt === 0);
 
   if (totalNow === 0) return (
@@ -1403,15 +1502,58 @@ function DebtTrackingCard({ T }) {
         ))}
       </div>
 
+      {/* Borç Özgürlük Tarihi Banner */}
+      {debtFreeLabel ? (
+        <div style={{ marginTop: 12, padding: '12px 14px', background: T.primaryLight, borderRadius: 12, border: `1.5px solid ${T.primary}40`, textAlign: 'center' }}>
+          <div style={{ fontSize: T.fs(11), color: T.textSub, marginBottom: 3 }}>🏁 Ne zaman borçsuz olacaksınız?</div>
+          <div style={{ fontSize: T.fs(20), fontWeight: 800, color: T.primary }}>{debtFreeLabel.dateStr}</div>
+          <div style={{ fontSize: T.fs(12), color: T.textSub, marginTop: 2 }}>{debtFreeLabel.durationStr}</div>
+        </div>
+      ) : totalNow > 0 && (
+        <div style={{ marginTop: 12, padding: '10px 14px', background: T.dangerBg, borderRadius: 10 }}>
+          <div style={{ fontSize: T.fs(12), fontWeight: 700, color: T.danger }}>⚠️ Aylık ödeme planı girilmemiş kartlar var — borç bitiş tarihi hesaplanamıyor.</div>
+        </div>
+      )}
+
+      {/* Borç Takvimi */}
+      {loanSchedule.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <button onClick={() => setShowSchedule(v => !v)}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}>
+            <span style={{ fontSize: T.fs(12), fontWeight: 700, color: T.text }}>📅 Borç Takvimi</span>
+            <svg width="14" height="14" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24" style={{ transform: showSchedule ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {showSchedule && (
+            <div style={{ background: T.surface2, borderRadius: 10, overflow: 'hidden', marginTop: 4 }}>
+              {loanSchedule.map((l, i) => {
+                const urgency = l.monthsLeft > 36 ? T.danger : l.monthsLeft > 12 ? T.warning : T.success;
+                return (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderBottom: i < loanSchedule.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+                    <div>
+                      <div style={{ fontSize: T.fs(12), fontWeight: 600, color: T.text }}>{l.name}</div>
+                      <div style={{ fontSize: T.fs(10), color: T.textSub }}>{l.bank} · {fmtK(l.remaining)} kalan</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: T.fs(12), fontWeight: 700, color: urgency }}>{l.payoffLabel}</div>
+                      <div style={{ fontSize: T.fs(10), color: T.textSub }}>{l.monthsLeft} ay</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Azalış özeti */}
-      <div style={{ marginTop: 12, padding: '10px 14px', background: pctChange > 0 ? T.successBg : T.dangerBg, borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginTop: 10, padding: '10px 14px', background: pctChange > 0 ? T.successBg : T.dangerBg, borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: T.fs(12), fontWeight: 700, color: pctChange > 0 ? T.success : T.danger }}>
             {pctChange > 0 ? `12 ayda %${pctChange} azalıyor` : 'Borç sabit kalıyor'}
           </div>
-          {loanFreeMonth > 0 && loanFreeMonth <= 12 && (
+          {debtBurdenPct !== null && (
             <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>
-              🏁 {projection[loanFreeMonth].lbl}'da krediniz bitiyor
+              Aylık gelirin %{debtBurdenPct}'ı ödemeye gidiyor
             </div>
           )}
         </div>
@@ -2178,8 +2320,6 @@ function AddCardModal({ onClose, T, existing }) {
   );
 }
 
-const MONTHS_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-
 function AddLoanModal({ onClose, T, existing }) {
   const [freq, setFreq]         = React.useState(existing?.frequency || 'monthly');
   const [name, setName]         = React.useState(existing?.name || '');
@@ -2279,6 +2419,8 @@ function RecurringModal({ onClose, T }) {
   const [newCat, setNewCat]       = React.useState('Gelir');
   const [newDay, setNewDay]       = React.useState('1');
   const [newFreq, setNewFreq]     = React.useState('monthly');
+  const [newIncomeType, setNewIncomeType] = React.useState('salary');
+  const [newYearlyMonth, setNewYearlyMonth] = React.useState('1');
   const todayIso = new Date().toISOString().slice(0,10);
   const [newDate, setNewDate]     = React.useState(todayIso);
   const [saving, setSaving]       = React.useState(false);
@@ -2338,6 +2480,8 @@ function RecurringModal({ onClose, T }) {
       catColor: newType === 'income' ? '#059669' : (CAT_COLORS[newCat] || '#9CA3AF'),
       frequency: newFreq,
       dayOfMonth: newFreq === 'once' ? parseInt(newDate.split('-')[2]) : (parseInt(newDay)||1),
+      ...(newType === 'income' ? { incomeType: newIncomeType } : {}),
+      ...(newFreq === 'yearly' ? { yearlyMonth: parseInt(newYearlyMonth) || 1 } : {}),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     if (newFreq === 'once') {
@@ -2350,7 +2494,7 @@ function RecurringModal({ onClose, T }) {
     } else {
       await db.collection(`users/${user.uid}/recurring`).add(entry);
     }
-    setNewLabel(''); setNewAmount(''); setShowAdd(false); setSaving(false);
+    setNewLabel(''); setNewAmount(''); setNewIncomeType('salary'); setNewYearlyMonth('1'); setShowAdd(false); setSaving(false);
   };
 
   const pending = items.filter(isPending);
@@ -2378,7 +2522,16 @@ function RecurringModal({ onClose, T }) {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{item.label}</div>
-            <div style={{ fontSize: 11, color: T.textSub }}>{item.frequency === 'monthly' ? `Her ay ${item.dayOfMonth}. gün` : item.frequency === 'yearly' ? `Her yıl ${item.dayOfMonth}. gün` : 'Tek seferlik'}</div>
+            <div style={{ fontSize: 11, color: T.textSub }}>{(() => {
+              const typeMap = { salary:'💼 Maaş', freelance:'🖥 Freelance', rent:'🏠 Kira', harvest:'🌾 Hasat', other:'📦 Diğer' };
+              const typeLabel = item.amount > 0 && item.incomeType ? (typeMap[item.incomeType] || '') : '';
+              if (item.frequency === 'once') return 'Tek seferlik';
+              if (item.frequency === 'yearly') {
+                const monthName = item.yearlyMonth ? MONTHS_TR[item.yearlyMonth - 1] : '';
+                return `Her yıl ${monthName ? monthName + ' ' : ''}${item.dayOfMonth}. gün${typeLabel ? ' · ' + typeLabel : ''}`;
+              }
+              return `Her ay ${item.dayOfMonth}. gün${typeLabel ? ' · ' + typeLabel : ''}`;
+            })()}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <MonoAmt value={Math.abs(item.amount)} type={item.amount > 0 ? 'income' : 'expense'} size={13} />
@@ -2400,6 +2553,21 @@ function RecurringModal({ onClose, T }) {
           <div style={{ marginTop: 10 }}>
             <FField label="Açıklama" value={newLabel} onChange={setNewLabel} placeholder="Maaş" T={T} />
             <FField label="Tutar (₺)" value={newAmount} onChange={setNewAmount} type="number" inputMode="numeric" prefix="₺" placeholder="10000" T={T} />
+            {newType === 'income' && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Gelir Türü</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {[['salary','💼 Maaş'],['freelance','🖥 Freelance'],['rent','🏠 Kira'],['harvest','🌾 Hasat'],['other','📦 Diğer']].map(([id,lbl]) => (
+                    <Pill key={id} label={lbl} active={newIncomeType === id} onClick={() => setNewIncomeType(id)} T={T} />
+                  ))}
+                </div>
+                {newIncomeType === 'harvest' && (
+                  <div style={{ marginTop: 6, padding: '7px 10px', background: T.warningBg, borderRadius: 8, fontSize: T.fs(11), color: T.warning, fontWeight: 600 }}>
+                    🌾 Sezonsal gelir için Yıllık sıklık + hangi ayda geldiğini belirtin.
+                  </div>
+                )}
+              </div>
+            )}
             {newType === 'expense' && <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -2420,8 +2588,26 @@ function RecurringModal({ onClose, T }) {
                 <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
                   style={{ width:'100%', height:44, border:`1.5px solid ${T.border}`, borderRadius:10, padding:'0 14px', fontSize:14, outline:'none', background:T.surface, color:T.text, fontFamily:"'DM Sans',sans-serif" }} />
               </div>
+            ) : newFreq === 'yearly' ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Her yıl hangi ay, hangi günde?</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 2 }}>
+                    <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>Ay</div>
+                    <select value={newYearlyMonth} onChange={e => setNewYearlyMonth(e.target.value)}
+                      style={{ width:'100%', height:44, border:`1.5px solid ${T.border}`, borderRadius:10, padding:'0 10px', fontSize:T.fs(13), outline:'none', background:T.surface, color:T.text, fontFamily:"'DM Sans',sans-serif", appearance:'none' }}>
+                      {MONTHS_TR.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>Gün</div>
+                    <input value={newDay} onChange={e => setNewDay(e.target.value)} type="number" inputMode="numeric" min="1" max="31" placeholder="1"
+                      style={{ width:'100%', height:44, border:`1.5px solid ${newDay ? T.primary : T.border}`, borderRadius:10, padding:'0 10px', fontSize:16, fontWeight:700, outline:'none', background:T.surface, color:T.text, fontFamily:"'DM Mono',monospace", textAlign:'center' }} />
+                  </div>
+                </div>
+              </div>
             ) : (
-              <FField label={newFreq === 'yearly' ? 'Hangi Ay Günü' : 'Her Ayın Kaçında'} value={newDay} onChange={setNewDay} type="number" inputMode="numeric" placeholder="1" T={T} />
+              <FField label="Her Ayın Kaçında" value={newDay} onChange={setNewDay} type="number" inputMode="numeric" placeholder="1" T={T} />
             )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowAdd(false)} style={{ flex: 1, height: 44, background: T.surface2, color: T.text, border: `1px solid ${T.border}`, borderRadius: 10, fontFamily: "'DM Sans',sans-serif", fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>İptal</button>
