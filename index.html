@@ -2484,12 +2484,35 @@ function QuickAddModal({ onClose, onSave, T }) {
   const [accountId, setAccountId] = React.useState(() => (DATA.accounts || [])[0]?.id || null);
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = React.useState(false);
+  const [addingCat, setAddingCat] = React.useState(false);
+  const [newCatName, setNewCatName] = React.useState('');
   const BASE_CATS = ['Mutfak', 'Ulaşım', 'Sağlık', 'Giyim', 'Ev Giderleri', 'Abonelik', 'Birikim', 'Diğer'];
   const spendingBudgets = (DATA.budgets || []).filter(b => b.type !== 'saving');
   const savingBudgets   = (DATA.budgets || []).filter(b => b.type === 'saving');
-  // Bütçe isimlerini base kategorilerden çıkar (çakışma olmasın), sonra birleştir
+  const customCats = (DATA.categories || []);
   const budgetCatNames = new Set(spendingBudgets.map(b => b.name));
   const baseCatsFiltered = BASE_CATS.filter(c => !budgetCatNames.has(c));
+
+  const CAT_CUSTOM_COLORS = ['#6366F1','#0EA5E9','#84CC16','#F43F5E','#A855F7','#14B8A6','#FB923C','#64748B'];
+
+  const handleAddCat = async () => {
+    const name = newCatName.trim();
+    if (!name) return;
+    const user = firebase.auth().currentUser;
+    const db = firebase.firestore();
+    const color = CAT_CUSTOM_COLORS[customCats.length % CAT_CUSTOM_COLORS.length];
+    await db.collection(`users/${user.uid}/categories`).add({ name, color, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    setCat(name);
+    setNewCatName('');
+    setAddingCat(false);
+  };
+
+  const handleDeleteCat = async (id, name) => {
+    const user = firebase.auth().currentUser;
+    const db = firebase.firestore();
+    await db.collection(`users/${user.uid}/categories`).doc(id).delete();
+    if (cat === name) setCat(null);
+  };
 
   const isoToTr = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
   const isToday = date === new Date().toISOString().slice(0, 10);
@@ -2504,7 +2527,7 @@ function QuickAddModal({ onClose, onSave, T }) {
     await onSave({
       label: label.trim() || cat,
       cat: type === 'income' ? 'Gelir' : cat,
-      catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || '#9CA3AF'),
+      catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || customCats.find(c => c.name === cat)?.color || '#9CA3AF'),
       amount: type === 'income' ? amt : -amt,
       date: isoToTr(date),
       accountId,
@@ -2569,14 +2592,42 @@ function QuickAddModal({ onClose, onSave, T }) {
         {type === 'expense' && <div style={{ marginTop: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
-            {!cat && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {!cat && <div style={{ fontSize: 11, color: T.danger, fontWeight: 600 }}>Seçim zorunlu</div>}
+              <button onClick={() => { setAddingCat(v => !v); setNewCatName(''); }}
+                style={{ width: 24, height: 24, borderRadius: '50%', background: addingCat ? T.danger : T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="12" height="12" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24">
+                  {addingCat ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></> : <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>}
+                </svg>
+              </button>
+            </div>
           </div>
+          {addingCat && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <input value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCat()}
+                placeholder="Yeni kategori adı..." autoFocus
+                style={{ flex: 1, height: 36, border: `1.5px solid ${T.primary}`, borderRadius: 8, padding: '0 10px', fontSize: 13, outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+              <button onClick={handleAddCat} disabled={!newCatName.trim()}
+                style={{ height: 36, padding: '0 14px', background: newCatName.trim() ? T.primary : T.border, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: newCatName.trim() ? 'pointer' : 'default' }}>
+                Ekle
+              </button>
+            </div>
+          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
             {spendingBudgets.map(b => (
               <Pill key={b.id} label={`${b.icon ? b.icon + ' ' : ''}${b.name}`} active={linkedBudgetId === b.id} onClick={() => { setCat(b.name); setLinkedBudgetId(b.id); }} T={T} />
             ))}
             {baseCatsFiltered.map(c => (
               <Pill key={c} label={c} active={cat === c && !linkedBudgetId} onClick={() => { setCat(c); setLinkedBudgetId(null); }} T={T} />
+            ))}
+            {customCats.map(c => (
+              <div key={c.id} style={{ position: 'relative', display: 'inline-flex' }}>
+                <Pill label={c.name} active={cat === c.name && !linkedBudgetId} onClick={() => { setCat(c.name); setLinkedBudgetId(null); }} T={T} color={c.color} />
+                <button onClick={e => { e.stopPropagation(); handleDeleteCat(c.id, c.name); }}
+                  style={{ position: 'absolute', top: -6, right: -6, width: 16, height: 16, borderRadius: '50%', background: T.danger, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                  <svg width="8" height="8" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
             ))}
           </div>
         </div>}
@@ -2661,7 +2712,7 @@ function App() {
   React.useEffect(() => {
     if (!user) return;
     const uid = user.uid;
-    const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [], recurring: [] };
+    const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [], recurring: [], categories: [] };
     const refresh = (key, val) => { raw[key] = val; DATA = computeAppData(raw); forceUpdate(); };
     const unsubs = [
       db.collection(`users/${uid}/transactions`).orderBy('createdAt', 'desc').onSnapshot(s => refresh('transactions', s.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -2671,6 +2722,7 @@ function App() {
       db.collection(`users/${uid}/upcoming`).onSnapshot(s => refresh('upcoming', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/recurring`).onSnapshot(s => refresh('recurring', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/accounts`).onSnapshot(s => refresh('accounts', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/categories`).onSnapshot(s => refresh('categories', s.docs.map(d => ({ id: d.id, ...d.data() })))),
     ];
     // Load saved theme/accent
     db.doc(`users/${uid}/meta/profile`).get().then(doc => {
