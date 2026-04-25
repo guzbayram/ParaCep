@@ -354,9 +354,9 @@ function Scroller({ children, style = {} }) {
 }
 function BottomSheet({ title, onClose, T, children }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'absolute', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
-      <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)', maxHeight: '92vh', overflowY: 'auto' }}>
+      <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)', maxHeight: '85%', overflowY: 'auto', width: '100%' }}>
         <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, padding: '14px 0 12px', borderBottom: `1px solid ${T.border}`, marginBottom: 14 }}>{title}</div>
         {children}
@@ -2854,9 +2854,9 @@ function QuickAddModal({ onClose, onSave, T }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'absolute', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
-      <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 24px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)', maxHeight: '75%', overflowY: 'auto', width: '100%' }}>
         <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, textAlign: 'center', padding: '14px 0 12px', borderBottom: `1px solid ${T.border}` }}>İşlem Ekle</div>
         <div style={{ marginTop: 14 }}>
@@ -2959,7 +2959,7 @@ function QuickAddModal({ onClose, onSave, T }) {
 // ─── PHONE SHELL ──────────────────────────────────────────────────────────────
 function PhoneShell({ children, T }) {
   return (
-    <div style={{ width: 390, height: 844, background: T.shellBg, borderRadius: 46, overflow: 'hidden', position: 'relative', boxShadow: '0 28px 80px rgba(0,0,0,.28),inset 0 0 0 1.5px rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", transition: 'background .3s' }}>
+    <div style={{ width: 390, height: 844, background: T.shellBg, borderRadius: 46, overflow: 'clip', position: 'relative', boxShadow: '0 28px 80px rgba(0,0,0,.28),inset 0 0 0 1.5px rgba(255,255,255,.08)', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", transition: 'background .3s' }}>
       <StatusBar T={T} />
       {children}
     </div>);
@@ -3254,12 +3254,12 @@ function App() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
         onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {renderScreen()}
-        {modal && <QuickAddModal onClose={() => setModal(false)} onSave={saveTransaction} T={T} />}
       </div>
       <div style={{ background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0, position: 'relative', zIndex: 100 }}>
         {renderTabBar()}
         {swipeDots}
       </div>
+      {modal && <QuickAddModal onClose={() => setModal(false)} onSave={saveTransaction} T={T} />}
     </div>
   );
 
@@ -3292,11 +3292,11 @@ function App() {
           {renderHeader()}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
             {renderScreen()}
-            {modal && <QuickAddModal onClose={() => setModal(false)} onSave={saveTransaction} T={T} />}
           </div>
-          <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0 }}>
+          <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0, position: 'relative', zIndex: 100 }}>
             {renderTabBar(9, -18)}
           </div>
+          {modal && <QuickAddModal onClose={() => setModal(false)} onSave={saveTransaction} T={T} />}
         </PhoneShell>
       </div>
     </div>
