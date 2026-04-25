@@ -996,6 +996,8 @@ function EditTransactionModal({ tx, onClose, T }) {
     const parts = (tx.date || '').split('.');
     return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : new Date().toISOString().slice(0,10);
   });
+  const [accountId, setAccountId] = React.useState(tx.accountId || null);
+  const [cardId, setCardId]       = React.useState(tx.cardId || null);
   const [saving, setSaving] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
@@ -1016,6 +1018,8 @@ function EditTransactionModal({ tx, onClose, T }) {
       catColor: type === 'income' ? '#059669' : (CAT_COLORS[cat] || '#9CA3AF'),
       amount: type === 'income' ? amt : -amt,
       date: trDate(date),
+      accountId: accountId || null,
+      cardId: cardId || null,
     });
     setSaving(false);
     onClose();
@@ -1052,9 +1056,31 @@ function EditTransactionModal({ tx, onClose, T }) {
       {type === 'expense' && <div style={{ marginTop: 12 }}>
         <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 7, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {CATS.filter(c => c !== 'Gelir').map(c => <Pill key={c} label={c} active={cat === c} onClick={() => setCat(c)} T={T} />)}
+          {(DATA.categories || []).map(c => <Pill key={c.id} label={c.name} active={cat === c.name} onClick={() => setCat(c.name)} T={T} color={c.color} />)}
         </div>
       </div>}
+
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>{type === 'income' ? 'Gelir Hesabı' : 'Ödeme Hesabı / Kartı'}</div>
+        {(DATA.accounts || []).length > 0 && <>
+          <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>🏦 Banka</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+            {(DATA.accounts || []).map(a => (
+              <Pill key={a.id} label={`${a.icon} ${a.name}`} active={accountId === a.id && !cardId}
+                onClick={() => { setAccountId(a.id); setCardId(null); }} T={T} />
+            ))}
+          </div>
+        </>}
+        {type === 'expense' && (DATA.cards || []).length > 0 && <>
+          <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>💳 Kredi Kartı</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {(DATA.cards || []).map(c => (
+              <Pill key={c.id} label={`💳 ${c.name}`} active={cardId === c.id}
+                onClick={() => { setCardId(c.id); setAccountId(null); }} T={T} />
+            ))}
+          </div>
+        </>}
+      </div>
 
       <div style={{ marginTop: 12 }}>
         <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tarih</div>
@@ -2503,6 +2529,8 @@ function RecurringModal({ onClose, T }) {
   const [newFreq, setNewFreq]     = React.useState('monthly');
   const [newIncomeType, setNewIncomeType] = React.useState('salary');
   const [newYearlyMonth, setNewYearlyMonth] = React.useState('1');
+  const [newAccountId, setNewAccountId] = React.useState(() => (DATA.accounts || [])[0]?.id || null);
+  const [newCardId, setNewCardId] = React.useState(null);
   const todayIso = new Date().toISOString().slice(0,10);
   const [newDate, setNewDate]     = React.useState(todayIso);
   const [saving, setSaving]       = React.useState(false);
@@ -2532,8 +2560,20 @@ function RecurringModal({ onClose, T }) {
     await db.collection(`users/${user.uid}/transactions`).add({
       label: item.label, cat: item.cat, catColor: item.catColor,
       amount: item.amount, date: today,
+      accountId: item.accountId || null,
+      cardId: item.cardId || null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // Hesap bakiyesini güncelle
+    if (item.accountId) {
+      const account = DATA.accounts.find(a => a.id === item.accountId);
+      if (account) await db.collection(`users/${user.uid}/accounts`).doc(item.accountId).update({ balance: (account.balance || 0) + item.amount });
+    }
+    // Kredi kartı borcunu güncelle (gider ise artır)
+    if (item.cardId && item.amount < 0) {
+      const card = DATA.cards.find(c => c.id === item.cardId);
+      if (card) await db.collection(`users/${user.uid}/cards`).doc(item.cardId).update({ balance: (card.balance || 0) + Math.abs(item.amount) });
+    }
   };
 
   const addAllPending = async () => {
@@ -2564,19 +2604,29 @@ function RecurringModal({ onClose, T }) {
       dayOfMonth: newFreq === 'once' ? parseInt(newDate.split('-')[2]) : (parseInt(newDay)||1),
       ...(newType === 'income' ? { incomeType: newIncomeType } : {}),
       ...(newFreq === 'yearly' ? { yearlyMonth: parseInt(newYearlyMonth) || 1 } : {}),
+      ...(newAccountId ? { accountId: newAccountId } : {}),
+      ...(newCardId ? { cardId: newCardId } : {}),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     if (newFreq === 'once') {
-      // Tek seferlik → direkt işlem olarak ekle
       await db.collection(`users/${user.uid}/transactions`).add({
         label: entry.label, cat: entry.cat, catColor: entry.catColor,
         amount: entry.amount, date: isoToTr(newDate),
+        accountId: newAccountId || null, cardId: newCardId || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+      if (newAccountId) {
+        const acc = DATA.accounts.find(a => a.id === newAccountId);
+        if (acc) await db.collection(`users/${user.uid}/accounts`).doc(newAccountId).update({ balance: (acc.balance || 0) + entry.amount });
+      }
+      if (newCardId && entry.amount < 0) {
+        const card = DATA.cards.find(c => c.id === newCardId);
+        if (card) await db.collection(`users/${user.uid}/cards`).doc(newCardId).update({ balance: (card.balance || 0) + Math.abs(entry.amount) });
+      }
     } else {
       await db.collection(`users/${user.uid}/recurring`).add(entry);
     }
-    setNewLabel(''); setNewAmount(''); setNewIncomeType('salary'); setNewYearlyMonth('1'); setShowAdd(false); setSaving(false);
+    setNewLabel(''); setNewAmount(''); setNewIncomeType('salary'); setNewYearlyMonth('1'); setNewCardId(null); setShowAdd(false); setSaving(false);
   };
 
   const pending = items.filter(isPending);
@@ -2625,12 +2675,13 @@ function RecurringModal({ onClose, T }) {
             <div style={{ fontSize: 11, color: T.textSub }}>{(() => {
               const typeMap = { salary:'💼 Maaş', freelance:'🖥 Freelance', rent:'🏠 Kira', harvest:'🌾 Hasat', other:'📦 Diğer' };
               const typeLabel = item.amount > 0 && item.incomeType ? (typeMap[item.incomeType] || '') : '';
-              if (item.frequency === 'once') return 'Tek seferlik';
+              const accLabel = item.accountId ? (DATA.accounts.find(a => a.id === item.accountId)?.name || '') : item.cardId ? ('💳 ' + (DATA.cards.find(c => c.id === item.cardId)?.name || '')) : '';
+              if (item.frequency === 'once') return `Tek seferlik${accLabel ? ' · ' + accLabel : ''}`;
               if (item.frequency === 'yearly') {
                 const monthName = item.yearlyMonth ? MONTHS_TR[item.yearlyMonth - 1] : '';
-                return `Her yıl ${monthName ? monthName + ' ' : ''}${item.dayOfMonth}. gün${typeLabel ? ' · ' + typeLabel : ''}`;
+                return `Her yıl ${monthName ? monthName + ' ' : ''}${item.dayOfMonth}. gün${typeLabel ? ' · ' + typeLabel : ''}${accLabel ? ' · ' + accLabel : ''}`;
               }
-              return `Her ay ${item.dayOfMonth}. gün${typeLabel ? ' · ' + typeLabel : ''}`;
+              return `Her ay ${item.dayOfMonth}. gün${typeLabel ? ' · ' + typeLabel : ''}${accLabel ? ' · ' + accLabel : ''}`;
             })()}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2674,6 +2725,28 @@ function RecurringModal({ onClose, T }) {
                 {CATS.map(c => <Pill key={c} label={c} active={newCat === c} onClick={() => setNewCat(c)} T={T} />)}
               </div>
             </div>}
+            {/* Hesap / Kart seçimi */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>{newType === 'income' ? 'Gelir Hesabı' : 'Ödeme Hesabı / Kartı'}</div>
+              {(DATA.accounts || []).length > 0 && <>
+                <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>🏦 Banka</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                  {(DATA.accounts || []).map(a => (
+                    <Pill key={a.id} label={`${a.icon} ${a.name}`} active={newAccountId === a.id && !newCardId}
+                      onClick={() => { setNewAccountId(a.id); setNewCardId(null); }} T={T} />
+                  ))}
+                </div>
+              </>}
+              {newType === 'expense' && (DATA.cards || []).length > 0 && <>
+                <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>💳 Kredi Kartı</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                  {(DATA.cards || []).map(c => (
+                    <Pill key={c.id} label={`💳 ${c.name}`} active={newCardId === c.id}
+                      onClick={() => { setNewCardId(c.id); setNewAccountId(null); }} T={T} />
+                  ))}
+                </div>
+              </>}
+            </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Sıklık</div>
               <div style={{ display: 'flex', background: T.surface2, borderRadius: 10, padding: 3, gap: 2 }}>
