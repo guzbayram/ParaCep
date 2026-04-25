@@ -219,6 +219,7 @@ const SEED_DATA = {
 
 // Mutable working copy — updated from Firestore in real-time
 let DATA = { ...SEED_DATA };
+let IS_TEST_MODE = localStorage.getItem('pc_testData') === 'true';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 // Kart/özet başlıkları: en yakın bine yuvarla (₺10B)
@@ -2734,7 +2735,12 @@ function RecurringModal({ onClose, T }) {
 
   React.useEffect(() => {
     if (!user) return;
+    if (IS_TEST_MODE) {
+      setItems(DATA.recurring || []);
+      return;
+    }
     return db.collection(`users/${user.uid}/recurring`).orderBy('createdAt', 'desc').onSnapshot(snap => {
+      if (IS_TEST_MODE) { setItems(DATA.recurring || []); return; }
       setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, []);
@@ -2750,6 +2756,7 @@ function RecurringModal({ onClose, T }) {
   };
 
   const addTx = async (item) => {
+    if (IS_TEST_MODE) { alert('Test modunda işlem eklenemez.'); return; }
     const today = new Date().toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'.');
     await db.collection(`users/${user.uid}/transactions`).add({
       label: item.label, cat: item.cat, catColor: item.catColor,
@@ -2777,6 +2784,7 @@ function RecurringModal({ onClose, T }) {
   };
 
   const deleteItem = async (id) => {
+    if (IS_TEST_MODE) { alert('Test modunda silme yapılamaz.'); return; }
     await db.collection(`users/${user.uid}/recurring`).doc(id).delete();
   };
 
@@ -3574,7 +3582,7 @@ function App() {
         showTips={showTips}
         onToggleTips={() => { const n = !showTips; setShowTips(n); localStorage.setItem('pc_showTips', n); window.__setShowTips && window.__setShowTips(n); }}
         useTestData={useTestData}
-        onToggleTestData={() => { const n = !useTestData; setUseTestData(n); localStorage.setItem('pc_testData', String(n)); }}
+        onToggleTestData={() => { const n = !useTestData; setUseTestData(n); IS_TEST_MODE = n; localStorage.setItem('pc_testData', String(n)); }}
         user={user} isAdmin={isAdmin} onLogout={handleLogout} onExport={handleExport} onExportCSV={handleExportCSV} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
