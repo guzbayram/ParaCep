@@ -1334,6 +1334,13 @@ function TransactionsScreen({ T }) {
 function ReportsScreen({ T, chartStyle }) {
   const [period, setPeriod] = React.useState('6ay');
   const [openTip, setOpenTip] = React.useState(null);
+  const [snapshot, setSnapshot] = React.useState(null);
+  React.useEffect(() => {
+    const user = firebase.auth().currentUser;
+    if (!user) return;
+    firebase.firestore().doc(`users/${user.uid}/meta/snapshot`).get()
+      .then(doc => { if (doc.exists) setSnapshot(doc.data()); });
+  }, []);
   const maxIncome = Math.max(...DATA.monthIncomes);
   const maxExpense = Math.max(...DATA.monthExpenses);
   const savePct = DATA.income > 0 ? Math.round((DATA.income - DATA.expense) / DATA.income * 100) : 0;
@@ -1344,7 +1351,48 @@ function ReportsScreen({ T, chartStyle }) {
     `Toplam Gelir − Toplam Gider.\n\n${fmt(DATA.income)} − ${fmt(DATA.expense)} = ${fmt(DATA.income - DATA.expense)}`,
     `Net Tasarruf ÷ Toplam Gelir × 100.\n\n${fmt(DATA.income - DATA.expense)} ÷ ${fmt(DATA.income)} × 100 = %${savePct}`,
   ];
+  // Anlık değerler
+  const nowAssets = (DATA.accounts || []).reduce((s, a) => s + (a.balance || 0), 0);
+  const nowDebt   = (DATA.cards || []).reduce((s, c) => s + (c.balance || 0), 0)
+                  + (DATA.loans || []).reduce((s, l) => s + (l.remaining || 0), 0);
+  const nowNet    = nowAssets - nowDebt;
+
   return <Scroller>
+    {/* Başlangıca Göre Değişim */}
+    {snapshot && (() => {
+      const deltaNet    = nowNet    - snapshot.netWorth;
+      const deltaAssets = nowAssets - snapshot.totalAssets;
+      const deltaDebt   = snapshot.totalDebt - nowDebt; // pozitif = borç azaldı
+      const Row = ({ label, delta, reverse }) => {
+        const pos = reverse ? delta > 0 : delta >= 0;
+        const color = pos ? T.success : T.danger;
+        return (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ fontSize: T.fs(12), color: T.textSub }}>{label}</span>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700, color }}>
+              {delta >= 0 ? '+' : ''}{fmtK(delta)}
+            </span>
+          </div>
+        );
+      };
+      return (
+        <Card T={T} style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: T.fs(13), fontWeight: 700, color: T.text }}>📸 Başlangıca Göre Değişim</div>
+            <div style={{ fontSize: T.fs(10), color: T.textSub }}>Ref: {snapshot.date}</div>
+          </div>
+          <Row label="Net Değer" delta={deltaNet} />
+          <Row label="Toplam Varlık" delta={deltaAssets} />
+          <Row label="Toplam Borç (azalma +)" delta={deltaDebt} />
+          <div style={{ marginTop: 10, padding: '8px 10px', background: deltaNet >= 0 ? T.successBg : T.dangerBg, borderRadius: 8, textAlign: 'center' }}>
+            <span style={{ fontSize: T.fs(12), fontWeight: 700, color: deltaNet >= 0 ? T.success : T.danger }}>
+              {deltaNet >= 0 ? '📈 Başlangıçtan bu yana net değer arttı' : '📉 Başlangıçtan bu yana net değer azaldı'}
+            </span>
+          </div>
+        </Card>
+      );
+    })()}
+
     {/* Summary cards */}
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
       {[
@@ -2126,6 +2174,34 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
     setSavingPw(false);
   };
   const [showGuide, setShowGuide] = React.useState(false);
+  const [snap, setSnap] = React.useState(null);
+  const [snapSaving, setSnapSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    dbS.doc(`users/${user.uid}/meta/snapshot`).get().then(doc => {
+      if (doc.exists) setSnap(doc.data());
+    });
+  }, []);
+
+  const saveSnapshot = async () => {
+    if (!window.confirm('Mevcut finansal durumu başlangıç noktası olarak kaydetmek istiyor musunuz?')) return;
+    setSnapSaving(true);
+    const totalAssets = (DATA.accounts || []).reduce((s, a) => s + (a.balance || 0), 0);
+    const totalCardDebt = (DATA.cards || []).reduce((s, c) => s + (c.balance || 0), 0);
+    const totalLoanDebt = (DATA.loans || []).reduce((s, l) => s + (l.remaining || 0), 0);
+    const data = {
+      date: new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      totalAssets, totalCardDebt, totalLoanDebt,
+      totalDebt: totalCardDebt + totalLoanDebt,
+      netWorth: totalAssets - totalCardDebt - totalLoanDebt,
+      income: DATA.income, expense: DATA.expense,
+      savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    await dbS.doc(`users/${user.uid}/meta/snapshot`).set(data);
+    setSnap(data);
+    setSnapSaving(false);
+    alert(`✅ Başlangıç durumu ${data.date} tarihi için kaydedildi.`);
+  };
   const [open, setOpen] = React.useState({});
   const toggle = key => setOpen(o => ({ ...o, [key]: !o[key] }));
   const AccHdr = ({ id, label }) => (
@@ -2198,6 +2274,7 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
     { icon: '💱', label: 'Para Birimi', sub: 'TL (₺)' }]
   },
   { title: 'Veri', items: [
+    { icon: '📸', label: 'Başlangıç Durumunu Kaydet', sub: snap ? `Son kayıt: ${snap.date}` : 'Finansal başlangıç noktası oluştur', onTap: saveSnapshot },
     { icon: '📤', label: 'Dışa Aktar — JSON', sub: 'Tüm veri, JSON formatında', onTap: onExport },
     { icon: '📊', label: 'Dışa Aktar — CSV', sub: 'Google Tablolar / Excel formatında', onTap: onExportCSV },
     { icon: '🗑️', label: 'Tüm Veriyi Sil', sub: 'Geri alınamaz', danger: true, onTap: onDeleteData }]
