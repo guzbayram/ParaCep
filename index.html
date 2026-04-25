@@ -2102,9 +2102,6 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
       </div>
     </Card>}
 
-    {/* Admin Panel — sadece admin görür */}
-    {isAdmin && <AdminPanel T={T} db={firebase.firestore()} />}
-
     {/* Kategoriler */}
     <div>
       <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Kategoriler</div>
@@ -2209,6 +2206,21 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
         </Card>
       </div>
     )}
+
+    {/* Admin Panel — en altta, kapalı başlar */}
+    {isAdmin && (() => {
+      const [adminOpen, setAdminOpen] = React.useState(false);
+      return (
+        <div>
+          <button onClick={() => setAdminOpen(v => !v)}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 14px', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+            <span style={{ fontSize: T.fs(13), fontWeight: 700, color: T.textSub }}>🛠 Admin Paneli</span>
+            <svg width="14" height="14" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24" style={{ transform: adminOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {adminOpen && <AdminPanel T={T} db={firebase.firestore()} />}
+        </div>
+      );
+    })()}
 
     {showGuide && (
       <Card T={T} style={{ padding: '16px 14px', marginTop: 4 }}>
@@ -2931,7 +2943,7 @@ function QuickAddModal({ onClose, onSave, T }) {
                       ...(isLastOdd ? { gridColumn: '1 / -1', width: '50%', margin: '0 auto' } : {}) }}>
                     <span>💳</span>
                     <span>{c.name}</span>
-                    <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, opacity: .7 }}>{fmtK(c.balance)}</span>
+                    <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, opacity: .7, color: active ? T.danger : 'inherit' }}>{fmtK(Math.max(0, (c.limit || 0) - (c.balance || 0)))}</span>
                   </button>
                 );
               })}
