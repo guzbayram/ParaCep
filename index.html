@@ -316,6 +316,12 @@ async function seedUserData(uid, name) {
     { name: 'Birikim',     color: '#6366F1' }, { name: 'Diğer',      color: '#9CA3AF' },
   ];
   initCats.forEach(c => batch.set(db.collection(`users/${uid}/categories`).doc(), c));
+  const initIncomeTypes = [
+    { label: '💼 Maaş', key: 'salary' }, { label: '🖥 Freelance', key: 'freelance' },
+    { label: '🏠 Kira', key: 'rent' }, { label: '🌾 Hasat', key: 'harvest' },
+    { label: '📦 Diğer', key: 'other' },
+  ];
+  initIncomeTypes.forEach(t => batch.set(db.collection(`users/${uid}/incomeTypes`).doc(), t));
   await batch.commit();
 }
 
@@ -2054,10 +2060,24 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
   const [showGuide, setShowGuide] = React.useState(false);
-  const [catModal, setCatModal] = React.useState(null); // null | 'add' | {cat obj}
+  const [catModal, setCatModal] = React.useState(null);
   const [catName, setCatName] = React.useState('');
   const [catColor, setCatColor] = React.useState('#6366F1');
   const CAT_PALETTE = ['#F59E0B','#8B5CF6','#10B981','#EC4899','#3B82F6','#EF4444','#6366F1','#9CA3AF','#0EA5E9','#84CC16','#F43F5E','#14B8A6'];
+  // Gelir türleri
+  const [itModal, setItModal] = React.useState(false); // add modal
+  const [itLabel, setItLabel] = React.useState('');
+  const saveIncomeType = async () => {
+    if (!itLabel.trim()) return;
+    await dbS.collection(`users/${user.uid}/incomeTypes`).add({ label: itLabel.trim(), key: itLabel.trim().toLowerCase().replace(/\s+/g,'_'), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    setItLabel(''); setItModal(false);
+  };
+  const deleteIncomeType = async (it) => {
+    const useCount = (DATA.recurring || []).filter(r => r.incomeType === it.key).length;
+    if (useCount > 0) { alert(`"${it.label}" türü ${useCount} sabit işlemde kullanılıyor. Önce onları güncelleyin.`); return; }
+    if (!window.confirm(`"${it.label}" gelir türünü silmek istiyor musunuz?`)) return;
+    await dbS.collection(`users/${user.uid}/incomeTypes`).doc(it.id).delete();
+  };
   const dbS = firebase.firestore();
 
   const openAddCat = () => { setCatName(''); setCatColor('#6366F1'); setCatModal('add'); };
@@ -2131,6 +2151,39 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
         </button>
       </div>
     </Card>}
+
+    {/* Gelir Türleri */}
+    <div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Gelir Türleri</div>
+      <Card T={T} style={{ padding: '0 4px' }}>
+        {(DATA.incomeTypes || []).map((it, i) => (
+          <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderBottom: i < DATA.incomeTypes.length - 1 ? `1px solid ${T.border}` : 'none' }}>
+            <div style={{ flex: 1, fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{it.label}</div>
+            <div style={{ fontSize: T.fs(11), color: T.textSub, marginRight: 8 }}>
+              {(DATA.recurring || []).filter(r => r.incomeType === it.key).length} sabit işlem
+            </div>
+            <button onClick={() => deleteIncomeType(it)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.danger, padding: '2px 4px' }}>
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+            </button>
+          </div>
+        ))}
+        {itModal ? (
+          <div style={{ padding: '10px 12px', display: 'flex', gap: 8 }}>
+            <input value={itLabel} onChange={e => setItLabel(e.target.value)} placeholder="ör. 📦 Temettü" autoFocus
+              style={{ flex: 1, height: 38, border: `1.5px solid ${T.primary}`, borderRadius: 8, padding: '0 10px', fontSize: T.fs(13), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+            <button onClick={saveIncomeType} disabled={!itLabel.trim()}
+              style={{ height: 38, padding: '0 14px', background: itLabel.trim() ? T.primary : T.border, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(12), fontWeight: 700, cursor: itLabel.trim() ? 'pointer' : 'default' }}>Ekle</button>
+            <button onClick={() => { setItModal(false); setItLabel(''); }}
+              style={{ height: 38, padding: '0 10px', background: T.surface2, color: T.textSub, border: `1px solid ${T.border}`, borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(12), cursor: 'pointer' }}>İptal</button>
+          </div>
+        ) : (
+          <button onClick={() => setItModal(true)}
+            style={{ width: '100%', padding: '12px 0', background: 'none', border: 'none', borderTop: DATA.incomeTypes?.length ? `1px solid ${T.border}` : 'none', cursor: 'pointer', color: T.primary, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(13), fontWeight: 700 }}>
+            + Yeni Gelir Türü Ekle
+          </button>
+        )}
+      </Card>
+    </div>
 
     {/* Kategoriler */}
     <div>
@@ -2674,8 +2727,8 @@ function RecurringModal({ onClose, T }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{item.label}</div>
             <div style={{ fontSize: T.fs(11), color: T.textSub }}>{(() => {
-              const typeMap = { salary:'💼 Maaş', freelance:'🖥 Freelance', rent:'🏠 Kira', harvest:'🌾 Hasat', other:'📦 Diğer' };
-              const typeLabel = item.amount > 0 && item.incomeType ? (typeMap[item.incomeType] || '') : '';
+              const itFound = item.amount > 0 && item.incomeType ? (DATA.incomeTypes || []).find(t => (t.key||t.id) === item.incomeType) : null;
+              const typeLabel = itFound ? itFound.label : '';
               const accLabel = item.accountId ? (DATA.accounts.find(a => a.id === item.accountId)?.name || '') : item.cardId ? ('💳 ' + (DATA.cards.find(c => c.id === item.cardId)?.name || '')) : '';
               if (item.frequency === 'once') return `Tek seferlik${accLabel ? ' · ' + accLabel : ''}`;
               if (item.frequency === 'yearly') {
@@ -2708,9 +2761,12 @@ function RecurringModal({ onClose, T }) {
             {newType === 'income' && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Gelir Türü</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {[['salary','💼 Maaş'],['freelance','🖥 Freelance'],['rent','🏠 Kira'],['harvest','🌾 Hasat'],['other','📦 Diğer']].map(([id,lbl]) => (
-                    <Pill key={id} label={lbl} active={newIncomeType === id} onClick={() => setNewIncomeType(id)} T={T} />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center' }}>
+                  {(DATA.incomeTypes && DATA.incomeTypes.length > 0
+                    ? DATA.incomeTypes
+                    : [{ key:'salary',label:'💼 Maaş' },{ key:'freelance',label:'🖥 Freelance' },{ key:'rent',label:'🏠 Kira' },{ key:'harvest',label:'🌾 Hasat' },{ key:'other',label:'📦 Diğer' }]
+                  ).map(it => (
+                    <Pill key={it.key || it.id} label={it.label} active={newIncomeType === (it.key || it.id)} onClick={() => setNewIncomeType(it.key || it.id)} T={T} />
                   ))}
                 </div>
                 {newIncomeType === 'harvest' && (
@@ -2731,7 +2787,7 @@ function RecurringModal({ onClose, T }) {
               <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>{newType === 'income' ? 'Gelir Hesabı' : 'Ödeme Hesabı / Kartı'}</div>
               {(DATA.accounts || []).length > 0 && <>
                 <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>🏦 Banka</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6, justifyContent: 'center' }}>
                   {(DATA.accounts || []).map(a => (
                     <Pill key={a.id} label={`${a.icon} ${a.name}`} active={newAccountId === a.id && !newCardId}
                       onClick={() => { setNewAccountId(a.id); setNewCardId(null); }} T={T} />
@@ -2740,7 +2796,7 @@ function RecurringModal({ onClose, T }) {
               </>}
               {newType === 'expense' && (DATA.cards || []).length > 0 && <>
                 <div style={{ fontSize: T.fs(10), color: T.textSub, marginBottom: 4 }}>💳 Kredi Kartı</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6, justifyContent: 'center' }}>
                   {(DATA.cards || []).map(c => (
                     <Pill key={c.id} label={`💳 ${c.name}`} active={newCardId === c.id}
                       onClick={() => { setNewCardId(c.id); setNewAccountId(null); }} T={T} />
@@ -3154,7 +3210,7 @@ function App() {
   React.useEffect(() => {
     if (!user) return;
     const uid = user.uid;
-    const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [], recurring: [], categories: [] };
+    const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [], recurring: [], categories: [], incomeTypes: [] };
     const refresh = (key, val) => { raw[key] = val; DATA = computeAppData(raw); forceUpdate(); };
     const unsubs = [
       db.collection(`users/${uid}/transactions`).orderBy('createdAt', 'desc').onSnapshot(s => refresh('transactions', s.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -3165,6 +3221,7 @@ function App() {
       db.collection(`users/${uid}/recurring`).onSnapshot(s => refresh('recurring', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/accounts`).onSnapshot(s => refresh('accounts', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/categories`).onSnapshot(s => refresh('categories', s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      db.collection(`users/${uid}/incomeTypes`).onSnapshot(s => refresh('incomeTypes', s.docs.map(d => ({ id: d.id, ...d.data() })))),
     ];
     // Load saved theme/accent
     db.doc(`users/${uid}/meta/profile`).get().then(doc => {
