@@ -3356,25 +3356,40 @@ function App() {
     });
   }, []);
 
-  // Test verisi modu
-  const realDataRef = React.useRef(null);
+  // Test verisi modu — açılırken SEED_DATA yükle
   React.useEffect(() => {
     if (!user) return;
     if (useTestData) {
-      if (!realDataRef.current) realDataRef.current = DATA;
       DATA = { ...SEED_DATA };
       forceUpdate();
-    } else {
-      if (realDataRef.current) { DATA = realDataRef.current; realDataRef.current = null; forceUpdate(); }
     }
+    // Kapatma durumu rawRef effect'i hallediyor
   }, [useTestData, user]);
+
+  // Test modu ref — Firestore callback'lerinde güncel değere erişmek için
+  const useTestDataRef = React.useRef(useTestData);
+  const rawRef = React.useRef(null);
+  React.useEffect(() => {
+    useTestDataRef.current = useTestData;
+    if (!useTestData && rawRef.current) {
+      // Test modu kapandı → biriken gerçek veriyi hemen yükle
+      DATA = computeAppData(rawRef.current);
+      forceUpdate();
+    }
+  }, [useTestData]);
 
   // Firestore real-time listeners
   React.useEffect(() => {
     if (!user) return;
     const uid = user.uid;
     const raw = { transactions: [], cards: [], loans: [], budgets: [], upcoming: [], recurring: [], categories: [], incomeTypes: [] };
-    const refresh = (key, val) => { raw[key] = val; DATA = computeAppData(raw); forceUpdate(); };
+    rawRef.current = raw;
+    const refresh = (key, val) => {
+      raw[key] = val;
+      if (useTestDataRef.current) return; // test modunda gerçek veriyi DATA'ya yazma
+      DATA = computeAppData(raw);
+      forceUpdate();
+    };
     const unsubs = [
       db.collection(`users/${uid}/transactions`).orderBy('createdAt', 'desc').onSnapshot(s => refresh('transactions', s.docs.map(d => ({ id: d.id, ...d.data() })))),
       db.collection(`users/${uid}/cards`).onSnapshot(s => refresh('cards', s.docs.map(d => ({ id: d.id, ...d.data() })))),
