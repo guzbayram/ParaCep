@@ -696,23 +696,30 @@ function DashboardScreen({ T, onNav }) {
     <SectionHdr title="Bütçe & Birikimler" action="Tümü" onAction={() => onNav('budgets')} T={T} />
     {DATA.budgets.map((b, i) => {
       const isSaving = b.type === 'saving';
-      const val = isSaving ? Math.round(b.saved / b.target * 100) : Math.round(b.spent / b.monthly * 100);
+      const val = isSaving ? Math.round((b.saved||0) / (b.target||1) * 100) : Math.round((b.spent||0) / (b.monthly||1) * 100);
       const color = val > 80 ? isSaving ? T.success : T.danger : val > 60 ? T.warning : isSaving ? T.success : T.primary;
+      const tipTxt = isSaving
+        ? `🎯 Birikim: ${fmtK(b.target)} hedef\nBiriken: ${fmtK(b.saved||0)} · Kalan: ${fmtK(Math.max(0,(b.target||0)-(b.saved||0)))}`
+        : `💰 Aylık limit: ${fmtK(b.monthly)}\nHarcanan: ${fmtK(b.spent||0)} · Kalan: ${fmtK(Math.max(0,(b.monthly||0)-(b.spent||0)))}`;
       return (
         <Card key={i} T={T} style={{ padding: '12px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
               <span style={{ fontSize: 18 }}>{b.icon}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{b.name}</span>
+              <span style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>{b.name}</span>
+              {T.showTips && <span title={tipTxt} style={{ cursor: 'help', color: T.textMut, display: 'flex' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8" strokeLinecap="round" strokeWidth="3"/><line x1="12" y1="12" x2="12" y2="16"/>
+                </svg>
+              </span>}
             </div>
-            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: T.textSub }}>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), color: T.textSub }}>
               {isSaving ? `${fmtK(b.saved)} / ${fmtK(b.target)}` : `${fmtK(b.spent)} / ${fmtK(b.monthly)}`}
             </span>
           </div>
           <ProgressBar value={val} color={color} T={T} height={6} />
-          <div style={{ fontSize: 10, color: T.textMut, marginTop: 4 }}>%{val} {isSaving ? 'tamamlandı' : 'kullanıldı'}</div>
+          <div style={{ fontSize: T.fs(10), color: T.textMut, marginTop: 4 }}>%{val} {isSaving ? 'tamamlandı' : 'kullanıldı'}</div>
         </Card>);
-
     })}
   </Scroller>;
 }
@@ -1710,10 +1717,28 @@ function AddBudgetModal({ onClose, T, existing }) {
     setSaving(false); onClose();
   };
 
+  const [tipOpen, setTipOpen] = React.useState(null);
+  const tips = {
+    budget: `💰 Bütçe Modülü\n\nBir kategoriye aylık harcama limiti koyar.\n\nNasıl çalışır:\n• Aylık limit belirlersin (örn. Mutfak: ₺3.000)\n• İşlem eklerken bu bütçe kategorisini seçersen harcama otomatik düşülür\n• Bar kırmızıya döndüğünde limiti aştın demektir\n• Her ay başında "harcanan" sıfırlanmaz — manuel güncelleme yaparsın`,
+    saving: `🎯 Birikim Modülü\n\nBir hedefe düzenli para ayırır.\n\nNasıl çalışır:\n• Hedef tutar belirlersin (örn. Tatil: ₺20.000)\n• Gelir işlemi eklerken bu birikimi seçersen tutar otomatik eklenir\n• Bar yeşile döndüğünde hedefe ulaştın demektir\n• Sabit işlemlerle otomatik birikim planı kurabilirsin`,
+  };
+
   return (
     <BottomSheet title={existing ? 'Modülü Düzenle' : 'Yeni Modül'} onClose={onClose} T={T}>
-      <div style={{ marginBottom: 14 }}>
-        <SegControl tabs={[['budget','💰 Bütçe'],['saving','🎯 Birikim']]} active={type} onChange={setType} T={T} />
+      <div style={{ marginBottom: 14, position: 'relative' }}>
+        <SegControl tabs={[['budget','💰 Bütçe'],['saving','🎯 Birikim']]} active={type} onChange={v => { setType(v); setTipOpen(null); }} T={T} />
+        <button onClick={() => setTipOpen(tipOpen === type ? null : type)}
+          style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: tipOpen ? T.primary : T.textMut, padding: '4px 8px' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8" strokeLinecap="round" strokeWidth="3"/><line x1="12" y1="12" x2="12" y2="16"/>
+          </svg>
+        </button>
+        {tipOpen && (
+          <div onClick={() => setTipOpen(null)}
+            style={{ marginTop: 8, background: T.primaryLight, border: `1px solid ${T.primary}33`, borderRadius: 10, padding: '12px 14px', fontSize: T.fs(12), color: T.text, lineHeight: 1.65, whiteSpace: 'pre-line', cursor: 'pointer' }}>
+            {tips[tipOpen]}
+          </div>
+        )}
       </div>
 
       {/* İkon seçici */}
