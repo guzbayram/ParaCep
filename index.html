@@ -2788,7 +2788,10 @@ function RecurringModal({ onClose, T }) {
             {newType === 'expense' && <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Kategori</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center' }}>
-                {CATS.map(c => <Pill key={c} label={c} active={newCat === c} onClick={() => setNewCat(c)} T={T} />)}
+                {(DATA.categories && DATA.categories.length > 0
+                  ? DATA.categories
+                  : CATS.map(c => ({ name: c, color: CAT_COLORS[c] || '#9CA3AF' }))
+                ).map(c => <Pill key={c.id || c.name} label={c.name} active={newCat === c.name} onClick={() => setNewCat(c.name)} T={T} color={c.color} />)}
               </div>
             </div>}
             {/* Hesap / Kart seçimi */}
