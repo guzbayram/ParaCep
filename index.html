@@ -346,7 +346,7 @@ function Scroller({ children, style = {} }) {
 }
 function BottomSheet({ title, onClose, T, children }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 60, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
       <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)', maxHeight: '92vh', overflowY: 'auto' }}>
         <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
@@ -2787,7 +2787,7 @@ function QuickAddModal({ onClose, onSave, T }) {
   };
 
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)' }} />
       <div style={{ position: 'relative', background: T.surface, borderRadius: '22px 22px 0 0', padding: '0 16px 32px', boxShadow: '0 -6px 40px rgba(0,0,0,.2)', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: '12px auto 0' }} />
