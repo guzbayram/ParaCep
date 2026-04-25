@@ -2085,6 +2085,14 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
   const [showGuide, setShowGuide] = React.useState(false);
+  const [open, setOpen] = React.useState({});
+  const toggle = key => setOpen(o => ({ ...o, [key]: !o[key] }));
+  const AccHdr = ({ id, label }) => (
+    <button onClick={() => toggle(id)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 4px 6px', fontFamily: "'DM Sans',sans-serif" }}>
+      <span style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em' }}>{label}</span>
+      <svg width="13" height="13" fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24" style={{ transform: open[id] ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+  );
   const [catModal, setCatModal] = React.useState(null);
   const [catName, setCatName] = React.useState('');
   const [catColor, setCatColor] = React.useState('#6366F1');
@@ -2179,8 +2187,8 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
 
     {/* Gelir Türleri */}
     <div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Gelir Türleri</div>
-      <Card T={T} style={{ padding: '0 4px' }}>
+      <AccHdr id="incomeTypes" label="Gelir Türleri" />
+      {open.incomeTypes && <Card T={T} style={{ padding: '0 4px' }}>
         {(() => {
           const defaults = [{ key:'salary',label:'💼 Maaş' },{ key:'freelance',label:'🖥 Freelance' },{ key:'rent',label:'🏠 Kira' },{ key:'harvest',label:'🌾 Hasat' },{ key:'other',label:'📦 Diğer' }];
           const custom = (DATA.incomeTypes || []).filter(t => !defaults.find(d => d.key === (t.key || t.id)));
@@ -2215,13 +2223,13 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
             + Yeni Gelir Türü Ekle
           </button>
         )}
-      </Card>
+      </Card>}
     </div>
 
     {/* Kategoriler */}
     <div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Kategoriler</div>
-      <Card T={T} style={{ padding: '0 4px' }}>
+      <AccHdr id="categories" label="Kategoriler" />
+      {open.categories && <Card T={T} style={{ padding: '0 4px' }}>
         {(DATA.categories || []).map((c, i) => (
           <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderBottom: i < DATA.categories.length - 1 ? `1px solid ${T.border}` : 'none' }}>
             <div style={{ width: 12, height: 12, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
@@ -2241,13 +2249,13 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
           style={{ width: '100%', padding: '12px 0', background: 'none', border: 'none', borderTop: DATA.categories?.length ? `1px solid ${T.border}` : 'none', cursor: 'pointer', color: T.primary, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(13), fontWeight: 700 }}>
           + Yeni Kategori Ekle
         </button>
-      </Card>
+      </Card>}
     </div>
 
     {/* Bilgi ikonları toggle */}
     <div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Bilgi İkonları</div>
-      <Card T={T} style={{ padding: '14px 14px' }}>
+      <AccHdr id="tips" label="Bilgi İkonları" />
+      {open.tips && <Card T={T} style={{ padding: '14px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: T.fs(13), fontWeight: 600, color: T.text }}>Kart açıklamaları</div>
@@ -2258,13 +2266,13 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
             <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: showTips ? 23 : 3, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
           </button>
         </div>
-      </Card>
+      </Card>}
     </div>
 
     {/* Test Verisi */}
     <div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Geliştirici</div>
-      <Card T={T} style={{ padding: '14px 14px' }}>
+      <AccHdr id="dev" label="Geliştirici" />
+      {open.dev && <Card T={T} style={{ padding: '14px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: T.fs(13), fontWeight: 600, color: useTestData ? T.warning : T.text }}>
@@ -2279,13 +2287,13 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
             <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: useTestData ? 23 : 3, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
           </button>
         </div>
-      </Card>
+      </Card>}
     </div>
 
     {/* Font size picker */}
     <div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Yazı Boyutu</div>
-      <Card T={T} style={{ padding: '16px 14px' }}>
+      <AccHdr id="fontSize" label="Yazı Boyutu" />
+      {open.fontSize && <Card T={T} style={{ padding: '16px 14px' }}>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
           {FONT_SCALES.map(opt => {
             const active = fontScaleKey === opt.key;
@@ -2303,13 +2311,13 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
           <span style={{ fontSize: T.fs(13), color: T.text, fontWeight: 500 }}>Örnek metin: </span>
           <span style={{ fontSize: T.fs(13), color: T.textSub }}>Gelir, gider ve bakiye takibi.</span>
         </div>
-      </Card>
+      </Card>}
     </div>
 
     {/* Accent colour picker */}
     <div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Vurgu Rengi</div>
-      <Card T={T} style={{ padding: '14px 14px' }}>
+      <AccHdr id="accent" label="Vurgu Rengi" />
+      {open.accent && <Card T={T} style={{ padding: '14px 14px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
           {ACCENT_META.map((a) => {
             const active = accent === a.key;
@@ -2322,14 +2330,14 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
               </button>
             );
           })}
-        </div>
-      </Card>
+        </div>}
+      </Card>}
     </div>
 
     {sections.map((sec, si) =>
     <div key={si}>
-        <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>{sec.title}</div>
-        <Card T={T} style={{ padding: '0 4px' }}>
+        <AccHdr id={`sec_${si}`} label={sec.title} />
+        {open[`sec_${si}`] && <Card T={T} style={{ padding: '0 4px' }}>
           {sec.items.map((item, ii) =>
         <button key={ii} onClick={item.onTap} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 12px', borderBottom: ii < sec.items.length - 1 ? `1px solid ${T.border}` : 'none', background: 'none', border: 'none', cursor: item.onTap ? 'pointer' : 'default', borderRadius: 0, textAlign: 'left' }}>
               <span style={{ fontSize: T.fs(20), width: 30, textAlign: 'center' }}>{item.icon}</span>
@@ -2340,7 +2348,7 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
               {!item.danger && item.onTap && <svg width={T.fs(16)} height={T.fs(16)} fill="none" stroke={T.textMut} strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>}
             </button>
         )}
-        </Card>
+        </Card>}
       </div>
     )}
 
