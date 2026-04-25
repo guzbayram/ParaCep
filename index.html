@@ -220,8 +220,17 @@ const SEED_DATA = {
 let DATA = { ...SEED_DATA };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const fmt = (v) => `₺${Math.abs(v).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
-const fmtK = (v) => v >= 1000 ? `₺${(v / 1000).toLocaleString('tr-TR', { minimumFractionDigits: 0 })}B` : fmt(v);
+// Kart/özet başlıkları: en yakın bine yuvarla (₺10B)
+const fmtK = (v) => {
+  const a = Math.abs(v || 0);
+  if (a >= 1000000) return `₺${Math.round(a / 1000000)}M`;
+  if (a >= 1000)    return `₺${Math.round(a / 1000)}B`;
+  return `₺${Math.round(a).toLocaleString('tr-TR')}`;
+};
+// Liste/satır tutarları: en yakın tamsayıya yuvarla
+const fmt = (v) => `₺${Math.round(Math.abs(v || 0)).toLocaleString('tr-TR')}`;
+// Tam hassasiyet (gerektiğinde)
+const fmtFull = (v) => `₺${Math.abs(v || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
 
 const MONTHS_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const CAT_COLORS = {
