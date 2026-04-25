@@ -2084,6 +2084,22 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
+  const [devPwMode, setDevPwMode] = React.useState(false);
+  const [devPw, setDevPw] = React.useState('');
+  const [devPwErr, setDevPwErr] = React.useState('');
+
+  const handleDevToggle = async () => {
+    if (!devPw) { setDevPwErr('Şifre boş olamaz.'); return; }
+    try {
+      const cred = firebase.auth.EmailAuthProvider.credential(user.email, devPw);
+      await user.reauthenticateWithCredential(cred);
+      onToggleTestData();
+      setDevPwMode(false); setDevPw(''); setDevPwErr('');
+    } catch {
+      setDevPwErr('Yanlış şifre. Tekrar deneyin.');
+    }
+  };
+
   const [editPw, setEditPw] = React.useState(false);
   const [currentPw, setCurrentPw] = React.useState('');
   const [newPw, setNewPw] = React.useState('');
@@ -2319,20 +2335,36 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
     <div>
       <AccHdr id="dev" label="Geliştirici" />
       {open.dev && <Card T={T} style={{ padding: '14px 14px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: devPwMode ? 12 : 0 }}>
           <div>
             <div style={{ fontSize: T.fs(13), fontWeight: 600, color: useTestData ? T.warning : T.text }}>
               {useTestData ? '🧪 Test Verisi Aktif' : 'Test Verisi'}
             </div>
             <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>
-              {useTestData ? 'Gerçek verileriniz gizlendi' : 'Açınca demo veriler gösterilir'}
+              {useTestData ? 'Gerçek verileriniz gizlendi' : 'Şifrenizle açılır'}
             </div>
           </div>
-          <button onClick={onToggleTestData}
+          <button onClick={() => { setDevPwMode(v => !v); setDevPw(''); setDevPwErr(''); }}
             style={{ width: 46, height: 26, borderRadius: 13, background: useTestData ? T.warning : T.border, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
             <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: useTestData ? 23 : 3, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
           </button>
         </div>
+        {devPwMode && (
+          <div>
+            <div style={{ fontSize: T.fs(11), color: T.textSub, marginBottom: 6 }}>Uygulama şifrenizi girin:</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="password" value={devPw} onChange={e => setDevPw(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleDevToggle()}
+                placeholder="Şifre" autoFocus
+                style={{ flex: 1, height: 38, border: `1.5px solid ${devPwErr ? T.danger : T.primary}`, borderRadius: 8, padding: '0 12px', fontSize: T.fs(13), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+              <button onClick={handleDevToggle}
+                style={{ height: 38, padding: '0 14px', background: T.primary, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(12), fontWeight: 700, cursor: 'pointer' }}>
+                {useTestData ? 'Kapat' : 'Aç'}
+              </button>
+            </div>
+            {devPwErr && <div style={{ fontSize: T.fs(11), color: T.danger, marginTop: 5, fontWeight: 600 }}>{devPwErr}</div>}
+          </div>
+        )}
       </Card>}
     </div>
 
