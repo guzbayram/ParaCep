@@ -2055,7 +2055,7 @@ function AdminPanel({ T, db }) {
   );
 }
 
-function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, showTips, onToggleTips, user, isAdmin, onLogout, onExport, onExportCSV, onDeleteData }) {
+function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKey, onFontScale, showTips, onToggleTips, useTestData, onToggleTestData, user, isAdmin, onLogout, onExport, onExportCSV, onDeleteData }) {
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
@@ -2231,6 +2231,27 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
           <button onClick={onToggleTips}
             style={{ width: 46, height: 26, borderRadius: 13, background: showTips ? T.primary : T.border, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
             <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: showTips ? 23 : 3, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
+          </button>
+        </div>
+      </Card>
+    </div>
+
+    {/* Test Verisi */}
+    <div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textMut, textTransform: 'uppercase', letterSpacing: '.07em', margin: '4px 4px 6px' }}>Geliştirici</div>
+      <Card T={T} style={{ padding: '14px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: T.fs(13), fontWeight: 600, color: useTestData ? T.warning : T.text }}>
+              {useTestData ? '🧪 Test Verisi Aktif' : 'Test Verisi'}
+            </div>
+            <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 2 }}>
+              {useTestData ? 'Gerçek verileriniz gizlendi' : 'Açınca demo veriler gösterilir'}
+            </div>
+          </div>
+          <button onClick={onToggleTestData}
+            style={{ width: 46, height: 26, borderRadius: 13, background: useTestData ? T.warning : T.border, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: useTestData ? 23 : 3, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
           </button>
         </div>
       </Card>
@@ -3185,6 +3206,7 @@ function App() {
   const [accent, setAccent] = React.useState(() => localStorage.getItem('pc_accent') || 'purple');
   const [chartStyle, setChartStyle] = React.useState('bar');
   const [showTips, setShowTips] = React.useState(() => localStorage.getItem('pc_showTips') !== 'false');
+  const [useTestData, setUseTestData] = React.useState(() => localStorage.getItem('pc_testData') === 'true');
   const [fontScaleKey, setFontScaleKey] = React.useState(() => localStorage.getItem('pc_fskey') || 'm');
   const [fontScale, setFontScale]       = React.useState(() => parseFloat(localStorage.getItem('pc_fs')) || 1.0);
   const [isMobile, setIsMobile] = React.useState(() => window.matchMedia('(max-width: 600px)').matches);
@@ -3217,6 +3239,19 @@ function App() {
       if (!u) { DATA = { ...SEED_DATA }; forceUpdate(); }
     });
   }, []);
+
+  // Test verisi modu
+  const realDataRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!user) return;
+    if (useTestData) {
+      if (!realDataRef.current) realDataRef.current = DATA;
+      DATA = { ...SEED_DATA };
+      forceUpdate();
+    } else {
+      if (realDataRef.current) { DATA = realDataRef.current; realDataRef.current = null; forceUpdate(); }
+    }
+  }, [useTestData, user]);
 
   // Firestore real-time listeners
   React.useEffect(() => {
@@ -3375,9 +3410,11 @@ function App() {
   };
 
   const handleDeleteData = async () => {
-    if (!user || !window.confirm('Tüm işlem verileriniz silinecek. Bu işlem geri alınamaz!')) return;
+    if (!user || !window.confirm('Tüm verileriniz silinecek. Önce CSV yedek otomatik indirilecek. Devam etmek istiyor musunuz?')) return;
+    handleExportCSV(); // önce yedek al
+    await new Promise(r => setTimeout(r, 600)); // indirme için kısa bekleme
     const uid = user.uid;
-    for (const col of ['transactions', 'cards', 'loans', 'budgets', 'upcoming']) {
+    for (const col of ['transactions', 'cards', 'loans', 'budgets', 'upcoming', 'accounts', 'recurring', 'categories', 'incomeTypes']) {
       const snap = await db.collection(`users/${uid}/${col}`).get();
       const batch = db.batch(); snap.docs.forEach(d => batch.delete(d.ref)); await batch.commit();
     }
@@ -3405,6 +3442,8 @@ function App() {
         onFontScale={(key, scale) => { setFontScaleKey(key); setFontScale(scale); localStorage.setItem('pc_fskey', key); localStorage.setItem('pc_fs', scale); if (user) db.doc(`users/${user.uid}/meta/profile`).set({ fontScaleKey: key }, { merge: true }); }}
         showTips={showTips}
         onToggleTips={() => { const n = !showTips; setShowTips(n); localStorage.setItem('pc_showTips', n); window.__setShowTips && window.__setShowTips(n); }}
+        useTestData={useTestData}
+        onToggleTestData={() => { const n = !useTestData; setUseTestData(n); localStorage.setItem('pc_testData', n); }}
         user={user} isAdmin={isAdmin} onLogout={handleLogout} onExport={handleExport} onExportCSV={handleExportCSV} onDeleteData={handleDeleteData} />;
       default:         return <DashboardScreen T={T} onNav={navigate} />;
     }
