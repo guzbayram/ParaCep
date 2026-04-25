@@ -2084,6 +2084,30 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
   const [editName, setEditName] = React.useState(false);
   const [nameVal, setNameVal] = React.useState(user?.displayName || '');
   const [savingName, setSavingName] = React.useState(false);
+  const [editPw, setEditPw] = React.useState(false);
+  const [currentPw, setCurrentPw] = React.useState('');
+  const [newPw, setNewPw] = React.useState('');
+  const [newPw2, setNewPw2] = React.useState('');
+  const [pwMsg, setPwMsg] = React.useState(null); // { ok, text }
+  const [savingPw, setSavingPw] = React.useState(false);
+
+  const changePassword = async () => {
+    if (newPw.length < 6) { setPwMsg({ ok: false, text: 'Yeni şifre en az 6 karakter olmalı.' }); return; }
+    if (newPw !== newPw2) { setPwMsg({ ok: false, text: 'Yeni şifreler eşleşmiyor.' }); return; }
+    setSavingPw(true); setPwMsg(null);
+    try {
+      const cred = firebase.auth.EmailAuthProvider.credential(user.email, currentPw);
+      await user.reauthenticateWithCredential(cred);
+      await user.updatePassword(newPw);
+      setPwMsg({ ok: true, text: 'Şifre başarıyla güncellendi.' });
+      setCurrentPw(''); setNewPw(''); setNewPw2('');
+    } catch (e) {
+      const msg = e.code === 'auth/wrong-password' ? 'Mevcut şifre yanlış.' :
+                  e.code === 'auth/weak-password' ? 'Yeni şifre çok zayıf.' : 'Bir hata oluştu.';
+      setPwMsg({ ok: false, text: msg });
+    }
+    setSavingPw(false);
+  };
   const [showGuide, setShowGuide] = React.useState(false);
   const [open, setOpen] = React.useState({});
   const toggle = key => setOpen(o => ({ ...o, [key]: !o[key] }));
@@ -2147,7 +2171,8 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
 
   const sections = [
   { title: 'Hesap', items: [
-    { icon: '👤', label: 'Profil Bilgileri', sub: user?.displayName || user?.email, onTap: () => setEditName(v => !v) },
+    { icon: '👤', label: 'Profil Bilgileri', sub: user?.displayName || user?.email, onTap: () => { setEditName(v => !v); setEditPw(false); } },
+    { icon: '🔑', label: 'Şifre Değiştir', sub: 'Güvenliğini güncelle', onTap: () => { setEditPw(v => !v); setEditName(false); setPwMsg(null); } },
     { icon: '🚪', label: 'Çıkış Yap', sub: user?.email, onTap: onLogout, danger: false, accent: true }]
   },
   { title: 'Tercihler', items: [
@@ -2182,6 +2207,27 @@ function SettingsScreen({ T, isDark, onToggleDark, accent, onAccent, fontScaleKe
         <button onClick={saveName} disabled={savingName} style={{ height: 40, padding: '0 16px', background: T.primary, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
           {savingName ? '…' : 'Kaydet'}
         </button>
+      </div>
+    </Card>}
+
+    {editPw && <Card T={T} style={{ padding: '14px 14px' }}>
+      <div style={{ fontSize: T.fs(12), fontWeight: 600, color: T.textSub, marginBottom: 10 }}>🔑 Şifre Değiştir</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Mevcut şifre"
+          style={{ height: 40, border: `1.5px solid ${T.border}`, borderRadius: 8, padding: '0 12px', fontSize: T.fs(13), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+        <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Yeni şifre (min. 6 karakter)"
+          style={{ height: 40, border: `1.5px solid ${T.border}`, borderRadius: 8, padding: '0 12px', fontSize: T.fs(13), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+        <input type="password" value={newPw2} onChange={e => setNewPw2(e.target.value)} placeholder="Yeni şifre (tekrar)"
+          style={{ height: 40, border: `1.5px solid ${newPw2 && newPw !== newPw2 ? T.danger : T.border}`, borderRadius: 8, padding: '0 12px', fontSize: T.fs(13), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif" }} />
+        {pwMsg && <div style={{ fontSize: T.fs(12), color: pwMsg.ok ? T.success : T.danger, fontWeight: 600 }}>{pwMsg.text}</div>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => { setEditPw(false); setCurrentPw(''); setNewPw(''); setNewPw2(''); setPwMsg(null); }}
+            style={{ flex: 1, height: 40, background: T.surface2, color: T.textSub, border: `1px solid ${T.border}`, borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(13), cursor: 'pointer' }}>İptal</button>
+          <button onClick={changePassword} disabled={savingPw || !currentPw || !newPw || !newPw2}
+            style={{ flex: 2, height: 40, background: savingPw || !currentPw || !newPw || !newPw2 ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 8, fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: T.fs(13), cursor: 'pointer' }}>
+            {savingPw ? 'Güncelleniyor…' : 'Şifreyi Güncelle'}
+          </button>
+        </div>
       </div>
     </Card>}
 
