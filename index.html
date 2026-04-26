@@ -864,12 +864,11 @@ function DebtsScreen({ T }) {
   };
 
   // Kredi kartı ödemesi
-  const payCard = async (card, amount, sourceLoan) => {
+  const payCard = async (card, amount, sourceLoan, accountId) => {
     const newBalance = Math.max(0, (card.balance || 0) - amount);
     await db.collection(`users/${user.uid}/cards`).doc(card.id).update({ balance: newBalance });
     const today = new Date().toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'.');
     if (sourceLoan) {
-      // Ödeme banka kredisinden yapıldı → kredinin kalan borcunu artır
       const newRemaining = (sourceLoan.remaining || 0) + amount;
       const newCount = (sourceLoan.remaining_count || 0) + Math.ceil(amount / (sourceLoan.monthly || amount));
       await db.collection(`users/${user.uid}/loans`).doc(sourceLoan.id).update({
@@ -878,20 +877,20 @@ function DebtsScreen({ T }) {
       });
       await db.collection(`users/${user.uid}/transactions`).add({
         label: `${card.name} Ödemesi (${sourceLoan.name})`, cat: 'Kart Ödemesi', catColor: '#1E3A5F',
-        amount: -amount, date: today,
+        amount: -amount, date: today, accountId: accountId || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     } else {
       await db.collection(`users/${user.uid}/transactions`).add({
         label: `${card.name} Ödemesi`, cat: 'Kart Ödemesi', catColor: '#1E3A5F',
-        amount: -amount, date: today,
+        amount: -amount, date: today, accountId: accountId || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
   };
 
   // Kredi taksit ödemesi
-  const payLoan = async (loan) => {
+  const payLoan = async (loan, accountId) => {
     const rc  = Math.max(0, (loan.remaining_count || 0) - 1);
     const rem = Math.max(0, (loan.remaining || 0) - (loan.monthly || 0));
     const paid = (loan.totalPaid || 0) + (loan.monthly || 0);
@@ -899,7 +898,7 @@ function DebtsScreen({ T }) {
     const today = new Date().toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'.');
     await db.collection(`users/${user.uid}/transactions`).add({
       label: `${loan.name} Taksiti`, cat: 'Kredi Taksiti', catColor: '#059669',
-      amount: -(loan.monthly || 0), date: today,
+      amount: -(loan.monthly || 0), date: today, accountId: accountId || null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   };
@@ -1084,7 +1083,8 @@ function DebtsScreen({ T }) {
       <CardPaymentModal
         card={payItem.item}
         loans={DATA.loans}
-        onConfirm={(amount, sourceLoan) => payCard(payItem.item, amount, sourceLoan)}
+        accounts={DATA.accounts || []}
+        onConfirm={(amount, sourceLoan, accountId) => payCard(payItem.item, amount, sourceLoan, accountId)}
         onClose={() => setPayItem(null)}
         T={T}
       />
@@ -1092,22 +1092,13 @@ function DebtsScreen({ T }) {
 
     {/* Kredi taksit onayı */}
     {payItem?.type === 'loan' && (
-      <BottomSheet title={`✅ ${payItem.item.name} Taksit Ödemesi`} onClose={() => setPayItem(null)} T={T}>
-        <div style={{ background: T.surface2, borderRadius: 12, padding: '16px 14px', marginBottom: 16, textAlign: 'center' }}>
-          <div style={{ fontSize: T.fs(11), color: T.textSub, marginBottom: 6 }}>Ödenecek tutar</div>
-          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(28), fontWeight: 700, color: T.success }}>{fmt(payItem.item.monthly)}</div>
-          <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 6 }}>
-            Kalan taksit: {payItem.item.remaining_count} → {Math.max(0, payItem.item.remaining_count - 1)}
-          </div>
-        </div>
-        <SaveBtn
-          onSave={async () => { await payLoan(payItem.item); setPayItem(null); }}
-          saving={false}
-          disabled={false}
-          T={T}
-          label="Taksiti Ödedim"
-        />
-      </BottomSheet>
+      <LoanPayModal
+        loan={payItem.item}
+        accounts={DATA.accounts || []}
+        onConfirm={async (accountId) => { await payLoan(payItem.item, accountId); setPayItem(null); }}
+        onClose={() => setPayItem(null)}
+        T={T}
+      />
     )}
   </>;
 }
@@ -2054,28 +2045,70 @@ function AddBudgetModal({ onClose, T, existing }) {
   );
 }
 
-function CardPaymentModal({ card, loans, onConfirm, onClose, T }) {
+function LoanPayModal({ loan, accounts, onConfirm, onClose, T }) {
+  const [accountId, setAccountId] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const selStyle = {
+    width: '100%', height: 44, border: `1.5px solid ${accountId ? T.primary : T.danger}`, borderRadius: 10,
+    padding: '0 36px 0 12px', fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500,
+    background: T.surface, color: accountId ? T.text : T.textSub, outline: 'none',
+    appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
+  };
+  return (
+    <BottomSheet title={`✅ ${loan.name} Taksit Ödemesi`} onClose={onClose} T={T}>
+      <div style={{ background: T.surface2, borderRadius: 12, padding: '16px 14px', marginBottom: 16, textAlign: 'center' }}>
+        <div style={{ fontSize: T.fs(11), color: T.textSub, marginBottom: 6 }}>Ödenecek tutar</div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(28), fontWeight: 700, color: T.success }}>{fmt(loan.monthly)}</div>
+        <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 6 }}>
+          Kalan taksit: {loan.remaining_count} → {Math.max(0, loan.remaining_count - 1)}
+        </div>
+      </div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+        Ödeme Hesabı <span style={{ color: T.danger }}>*</span>
+      </div>
+      <div style={{ position: 'relative', marginBottom: 16 }}>
+        <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selStyle}>
+          <option value="">— Hesap Seçin —</option>
+          {accounts.map(a => (
+            <option key={a.id} value={a.id}>{a.name} · {fmtK(a.balance)}</option>
+          ))}
+        </select>
+        <svg style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: T.textSub }} width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
+      </div>
+      <SaveBtn
+        onSave={async () => { setSaving(true); await onConfirm(accountId); setSaving(false); }}
+        saving={saving}
+        disabled={!accountId}
+        T={T}
+        label="Taksiti Ödedim"
+      />
+    </BottomSheet>
+  );
+}
+
+function CardPaymentModal({ card, loans, accounts, onConfirm, onClose, T }) {
   const [amount, setAmount] = React.useState('');
   const [sourceLoanId, setSourceLoanId] = React.useState('');
+  const [accountId, setAccountId] = React.useState('');
   const [saving, setSaving] = React.useState(false);
 
   const sourceLoan = loans.find(l => l.id === sourceLoanId) || null;
 
   const handleConfirm = async () => {
     const v = parseFloat(amount.replace(',', '.'));
-    if (!v || v <= 0) return;
+    if (!v || v <= 0 || !accountId) return;
     setSaving(true);
-    await onConfirm(v, sourceLoan);
+    await onConfirm(v, sourceLoan, accountId);
     setSaving(false);
     onClose();
   };
 
-  const selectStyle = {
-    width: '100%', height: 44, border: `1.5px solid ${T.border}`, borderRadius: 10,
-    padding: '0 12px', fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500,
-    background: T.surface, color: T.text, outline: 'none', marginBottom: 14,
-    appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer'
-  };
+  const selStyle = (hasVal) => ({
+    width: '100%', height: 44, border: `1.5px solid ${hasVal ? T.border : T.danger}`, borderRadius: 10,
+    padding: '0 36px 0 12px', fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500,
+    background: T.surface, color: hasVal ? T.text : T.textSub, outline: 'none', marginBottom: 14,
+    appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
+  });
 
   return (
     <BottomSheet title={`💳 ${card.name} Ödemesi`} onClose={onClose} T={T}>
@@ -2084,9 +2117,21 @@ function CardPaymentModal({ card, loans, onConfirm, onClose, T }) {
         <input value={amount} onChange={e => setAmount(e.target.value)} type="number" inputMode="decimal" placeholder="0,00" autoFocus
           style={{ width: '100%', height: 56, border: `2px solid ${T.success}`, borderRadius: 12, padding: '0 14px 0 34px', fontFamily: "'DM Mono',monospace", fontSize: 22, fontWeight: 600, outline: 'none', boxShadow: `0 0 0 3px ${T.success}22`, background: T.surface, color: T.text }} />
       </div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 600, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>Ödeme Kaynağı</div>
-      <div style={{ position: 'relative', marginBottom: 4 }}>
-        <select value={sourceLoanId} onChange={e => setSourceLoanId(e.target.value)} style={selectStyle}>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+        Ödeme Hesabı <span style={{ color: T.danger }}>*</span>
+      </div>
+      <div style={{ position: 'relative' }}>
+        <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selStyle(!!accountId)}>
+          <option value="">— Hesap Seçin —</option>
+          {accounts.map(a => (
+            <option key={a.id} value={a.id}>{a.name} · {fmtK(a.balance)}</option>
+          ))}
+        </select>
+        <svg style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: T.textSub }} width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
+      </div>
+      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>Ödeme Kaynağı</div>
+      <div style={{ position: 'relative' }}>
+        <select value={sourceLoanId} onChange={e => setSourceLoanId(e.target.value)} style={selStyle(true)}>
           <option value="">Kendi Bakiyem</option>
           {loans.map(l => (
             <option key={l.id} value={l.id}>{l.name} — {l.bank}</option>
@@ -2099,7 +2144,7 @@ function CardPaymentModal({ card, loans, onConfirm, onClose, T }) {
           ⚠️ Bu ödeme {sourceLoan.name} kredisine eklenecek. Kart borcun düşer, kredi borcun artar.
         </div>
       )}
-      <SaveBtn onSave={handleConfirm} saving={saving} disabled={!amount} T={T} label="Ödemeyi Kaydet" />
+      <SaveBtn onSave={handleConfirm} saving={saving} disabled={!amount || !accountId} T={T} label="Ödemeyi Kaydet" />
     </BottomSheet>
   );
 }
