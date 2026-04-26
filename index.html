@@ -1091,7 +1091,6 @@ function DebtsScreen({ T }) {
     {payItem?.type === 'card' && (
       <CardPaymentModal
         card={payItem.item}
-        loans={DATA.loans}
         accounts={DATA.accounts || []}
         onConfirm={(amount, sourceLoan, accountId) => payCard(payItem.item, amount, sourceLoan, accountId)}
         onClose={() => setPayItem(null)}
@@ -2057,8 +2056,11 @@ function AddBudgetModal({ onClose, T, existing }) {
 function LoanPayModal({ loan, accounts, onConfirm, onClose, T }) {
   const [accountId, setAccountId] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const selAccount = accounts.find(a => a.id === accountId);
+  const needed = loan.monthly || 0;
+  const insufficient = selAccount && selAccount.balance < needed;
   const selStyle = {
-    width: '100%', height: 44, border: `1.5px solid ${accountId ? T.primary : T.danger}`, borderRadius: 10,
+    width: '100%', height: 44, border: `1.5px solid ${insufficient ? T.danger : accountId ? T.primary : T.danger}`, borderRadius: 10,
     padding: '0 36px 0 12px', fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500,
     background: T.surface, color: accountId ? T.text : T.textSub, outline: 'none',
     appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
@@ -2067,7 +2069,7 @@ function LoanPayModal({ loan, accounts, onConfirm, onClose, T }) {
     <BottomSheet title={`✅ ${loan.name} Taksit Ödemesi`} onClose={onClose} T={T}>
       <div style={{ background: T.surface2, borderRadius: 12, padding: '16px 14px', marginBottom: 16, textAlign: 'center' }}>
         <div style={{ fontSize: T.fs(11), color: T.textSub, marginBottom: 6 }}>Ödenecek tutar</div>
-        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(28), fontWeight: 700, color: T.success }}>{fmt(loan.monthly)}</div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(28), fontWeight: 700, color: T.success }}>{fmt(needed)}</div>
         <div style={{ fontSize: T.fs(11), color: T.textSub, marginTop: 6 }}>
           Kalan taksit: {loan.remaining_count} → {Math.max(0, loan.remaining_count - 1)}
         </div>
@@ -2075,7 +2077,7 @@ function LoanPayModal({ loan, accounts, onConfirm, onClose, T }) {
       <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
         Ödeme Hesabı <span style={{ color: T.danger }}>*</span>
       </div>
-      <div style={{ position: 'relative', marginBottom: 16 }}>
+      <div style={{ position: 'relative', marginBottom: insufficient ? 6 : 16 }}>
         <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selStyle}>
           <option value="">— Hesap Seçin —</option>
           {accounts.map(a => (
@@ -2084,10 +2086,15 @@ function LoanPayModal({ loan, accounts, onConfirm, onClose, T }) {
         </select>
         <svg style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: T.textSub }} width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
       </div>
+      {insufficient && (
+        <div style={{ background: T.danger + '15', border: `1px solid ${T.danger}44`, borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: T.fs(11), color: T.danger, fontWeight: 600 }}>
+          ⚠️ Yetersiz bakiye. Gereken: {fmtK(needed)} · Mevcut: {fmtK(selAccount.balance)}
+        </div>
+      )}
       <SaveBtn
         onSave={async () => { setSaving(true); await onConfirm(accountId); setSaving(false); }}
         saving={saving}
-        disabled={!accountId}
+        disabled={!accountId || insufficient}
         T={T}
         label="Taksiti Ödedim"
       />
@@ -2095,32 +2102,37 @@ function LoanPayModal({ loan, accounts, onConfirm, onClose, T }) {
   );
 }
 
-function CardPaymentModal({ card, loans, accounts, onConfirm, onClose, T }) {
+function CardPaymentModal({ card, accounts, onConfirm, onClose, T }) {
   const [amount, setAmount] = React.useState('');
-  const [sourceLoanId, setSourceLoanId] = React.useState('');
   const [accountId, setAccountId] = React.useState('');
   const [saving, setSaving] = React.useState(false);
 
-  const sourceLoan = loans.find(l => l.id === sourceLoanId) || null;
+  const v = parseFloat(amount.replace(',', '.')) || 0;
+  const selAccount = accounts.find(a => a.id === accountId);
+  const insufficient = selAccount && v > 0 && selAccount.balance < v;
+  const canSave = v > 0 && accountId && !insufficient;
 
   const handleConfirm = async () => {
-    const v = parseFloat(amount.replace(',', '.'));
-    if (!v || v <= 0 || !accountId) return;
+    if (!canSave) return;
     setSaving(true);
-    await onConfirm(v, sourceLoan, accountId);
+    await onConfirm(v, null, accountId);
     setSaving(false);
     onClose();
   };
 
-  const selStyle = (hasVal) => ({
-    width: '100%', height: 44, border: `1.5px solid ${hasVal ? T.border : T.danger}`, borderRadius: 10,
+  const selStyle = {
+    width: '100%', height: 44, border: `1.5px solid ${insufficient ? T.danger : accountId ? T.border : T.danger}`, borderRadius: 10,
     padding: '0 36px 0 12px', fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500,
-    background: T.surface, color: hasVal ? T.text : T.textSub, outline: 'none', marginBottom: 14,
+    background: T.surface, color: accountId ? T.text : T.textSub, outline: 'none', marginBottom: insufficient ? 6 : 14,
     appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
-  });
+  };
 
   return (
     <BottomSheet title={`💳 ${card.name} Ödemesi`} onClose={onClose} T={T}>
+      <div style={{ background: T.surface2, borderRadius: 10, padding: '10px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', fontSize: T.fs(11), color: T.textSub }}>
+        <span>Mevcut borç</span>
+        <span style={{ fontFamily: "'DM Mono',monospace", fontWeight: 700, color: T.danger }}>{fmtK(card.balance)}</span>
+      </div>
       <div style={{ position: 'relative', marginBottom: 14 }}>
         <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontFamily: "'DM Mono',monospace", fontSize: 20, color: T.textSub }}>₺</span>
         <input value={amount} onChange={e => setAmount(e.target.value)} type="number" inputMode="decimal" placeholder="0,00" autoFocus
@@ -2130,7 +2142,7 @@ function CardPaymentModal({ card, loans, accounts, onConfirm, onClose, T }) {
         Ödeme Hesabı <span style={{ color: T.danger }}>*</span>
       </div>
       <div style={{ position: 'relative' }}>
-        <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selStyle(!!accountId)}>
+        <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selStyle}>
           <option value="">— Hesap Seçin —</option>
           {accounts.map(a => (
             <option key={a.id} value={a.id}>{a.name} · {fmtK(a.balance)}</option>
@@ -2138,22 +2150,12 @@ function CardPaymentModal({ card, loans, accounts, onConfirm, onClose, T }) {
         </select>
         <svg style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: T.textSub }} width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
       </div>
-      <div style={{ fontSize: T.fs(11), fontWeight: 700, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>Ödeme Kaynağı</div>
-      <div style={{ position: 'relative' }}>
-        <select value={sourceLoanId} onChange={e => setSourceLoanId(e.target.value)} style={selStyle(true)}>
-          <option value="">Kendi Bakiyem</option>
-          {loans.map(l => (
-            <option key={l.id} value={l.id}>{l.name} — {l.bank}</option>
-          ))}
-        </select>
-        <svg style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: T.textSub }} width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
-      </div>
-      {sourceLoan && (
-        <div style={{ background: T.warning + '18', border: `1px solid ${T.warning}44`, borderRadius: 10, padding: '10px 12px', marginBottom: 14, fontSize: T.fs(11), color: T.warning, fontWeight: 600 }}>
-          ⚠️ Bu ödeme {sourceLoan.name} kredisine eklenecek. Kart borcun düşer, kredi borcun artar.
+      {insufficient && (
+        <div style={{ background: T.danger + '15', border: `1px solid ${T.danger}44`, borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: T.fs(11), color: T.danger, fontWeight: 600 }}>
+          ⚠️ Yetersiz bakiye. Gereken: {fmtK(v)} · Mevcut: {fmtK(selAccount.balance)}
         </div>
       )}
-      <SaveBtn onSave={handleConfirm} saving={saving} disabled={!amount || !accountId} T={T} label="Ödemeyi Kaydet" />
+      <SaveBtn onSave={handleConfirm} saving={saving} disabled={!canSave} T={T} label="Ödemeyi Kaydet" />
     </BottomSheet>
   );
 }
@@ -3512,11 +3514,17 @@ function QuickAddModal({ onClose, onSave, T }) {
   const isToday = date === new Date().toISOString().slice(0, 10);
   const isPast  = date < new Date().toISOString().slice(0, 10);
 
+  const amt = parseFloat(amount.replace(',', '.')) || 0;
+  const selAccount = (DATA.accounts || []).find(a => a.id === accountId);
+  const selCard = (DATA.cards || []).find(c => c.id === cardId);
+  const accInsufficient = type === 'expense' && selAccount && amt > selAccount.balance;
+  const cardInsufficient = type === 'expense' && selCard && amt > ((selCard.limit || 0) - (selCard.balance || 0));
+
   const handleSave = async () => {
-    const amt = parseFloat(amount.replace(',', '.'));
     if (!amt || amt <= 0) return;
     if (type === 'expense' && !cat) return;
     if (!accountId && !cardId) return;
+    if (accInsufficient || cardInsufficient) return;
     setSaving(true);
     await onSave({
       label: label.trim() || cat,
@@ -3653,10 +3661,25 @@ function QuickAddModal({ onClose, onSave, T }) {
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
             style={{ width: '100%', height: 46, border: `1.5px solid ${isToday ? T.border : T.primary}`, borderRadius: 10, padding: '0 14px', fontSize: T.fs(14), outline: 'none', background: T.surface, color: T.text, fontFamily: "'DM Sans',sans-serif", boxSizing: 'border-box' }} />
         </div>
-        <button onClick={handleSave} disabled={saving || !amount || (type === 'expense' && !cat) || (!accountId && !cardId)}
-          style={{ width: '100%', height: 52, background: (saving || !amount || (type === 'expense' && !cat) || (!accountId && !cardId)) ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 16, cursor: (saving || !amount || (type === 'expense' && !cat) || (!accountId && !cardId)) ? 'default' : 'pointer', boxShadow: (saving || !amount || (type === 'expense' && !cat) || (!accountId && !cardId)) ? 'none' : T.fab }}>
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
+        {accInsufficient && (
+          <div style={{ background: T.danger + '15', border: `1px solid ${T.danger}44`, borderRadius: 8, padding: '7px 12px', marginTop: 10, fontSize: T.fs(11), color: T.danger, fontWeight: 600 }}>
+            ⚠️ Hesap bakiyesi yetersiz. Mevcut: {fmtK(selAccount.balance)}
+          </div>
+        )}
+        {cardInsufficient && (
+          <div style={{ background: T.danger + '15', border: `1px solid ${T.danger}44`, borderRadius: 8, padding: '7px 12px', marginTop: 10, fontSize: T.fs(11), color: T.danger, fontWeight: 600 }}>
+            ⚠️ Kart limiti yetersiz. Kullanılabilir: {fmtK((selCard.limit || 0) - (selCard.balance || 0))}
+          </div>
+        )}
+        {(() => {
+          const disabled = saving || !amt || (type === 'expense' && !cat) || (!accountId && !cardId) || accInsufficient || cardInsufficient;
+          return (
+            <button onClick={handleSave} disabled={disabled}
+              style={{ width: '100%', height: 52, background: disabled ? T.textMut : T.primary, color: '#fff', border: 'none', borderRadius: 12, fontFamily: "'DM Sans',sans-serif", fontSize: 15, fontWeight: 700, marginTop: 10, cursor: disabled ? 'default' : 'pointer', boxShadow: disabled ? 'none' : T.fab }}>
+              {saving ? 'Kaydediliyor…' : 'Kaydet'}
+            </button>
+          );
+        })()}
       </div>
     </div>
   );
