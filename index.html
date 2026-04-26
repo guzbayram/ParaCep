@@ -480,7 +480,7 @@ function TabBar({ active, onTab, T }) {
 
   return <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0, position: 'relative', zIndex: 100 }}>
     {tabs.map((t) => t.id === 'fab' ?
-    <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+    <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center', position: 'relative', zIndex: 300 }}>
         <button onClick={() => onTab('fab')} style={{ width: 56, height: 56, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: -20 }}>
           <svg width="26" height="26" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
         </button>
@@ -3967,7 +3967,7 @@ function App() {
   const renderTabBar = (lblSize = 10, fabOffset = -18) => {
     const lbl = T.fs(lblSize);
     return TAB_ITEMS.map(t => t.id === 'fab'
-      ? <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+      ? <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center', position: 'relative', zIndex: 300 }}>
           <button onClick={() => navigate('fab')} style={{ width: 52, height: 52, borderRadius: '50%', background: T.primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: T.fab, marginTop: fabOffset }}>
             <svg width="24" height="24" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
