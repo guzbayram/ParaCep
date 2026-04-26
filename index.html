@@ -749,7 +749,7 @@ function DashboardScreen({ T, onNav }) {
             </>;
           })()}
           {pts.length >= 2 && (
-            <svg width={W} height={H + 14} style={{ display: 'block' }}>
+            <svg viewBox={`0 0 ${W} ${H + 14}`} width="100%" height={H + 14} style={{ display: 'block' }}>
               <defs>
                 <linearGradient id="dashNetGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={color} stopOpacity="0.2" />
@@ -1577,7 +1577,7 @@ function ReportsScreen({ T, chartStyle }) {
               Henüz yeterli işlem yok
             </div>
           ) : (
-            <svg width={W} height={H + 20} style={{ display: 'block' }}>
+            <svg viewBox={`0 0 ${W} ${H + 20}`} width="100%" height={H + 20} style={{ display: 'block' }}>
               <defs>
                 <linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={lastColor} stopOpacity="0.25" />
