@@ -1335,6 +1335,7 @@ function ReportsScreen({ T, chartStyle }) {
   const [period, setPeriod] = React.useState('6ay');
   const [openTip, setOpenTip] = React.useState(null);
   const [snapshot, setSnapshot] = React.useState(null);
+  const [chartPeriod, setChartPeriod] = React.useState('monthly'); // 'daily'|'monthly'|'yearly'
   React.useEffect(() => {
     const user = firebase.auth().currentUser;
     if (!user) return;
@@ -1362,31 +1363,123 @@ function ReportsScreen({ T, chartStyle }) {
     {snapshot && (() => {
       const deltaNet    = nowNet    - snapshot.netWorth;
       const deltaAssets = nowAssets - snapshot.totalAssets;
-      const deltaDebt   = snapshot.totalDebt - nowDebt; // pozitif = borç azaldı
-      const Row = ({ label, delta, reverse }) => {
-        const pos = reverse ? delta > 0 : delta >= 0;
-        const color = pos ? T.success : T.danger;
-        return (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
-            <span style={{ fontSize: T.fs(12), color: T.textSub }}>{label}</span>
-            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(13), fontWeight: 700, color }}>
-              {delta >= 0 ? '+' : ''}{fmtK(delta)}
-            </span>
-          </div>
-        );
+      const deltaDebt   = snapshot.totalDebt - nowDebt;
+
+      // Snapshot tarihini parse et (DD.MM.YYYY)
+      const [sd, sm, sy] = snapshot.date.split('.');
+      const snapDate = new Date(+sy, +sm - 1, +sd);
+
+      // İşlemleri snapshot'tan sonraki ile filtrele
+      const txnsAfter = (DATA.transactions || []).filter(t => {
+        const [dd, mm, yy] = t.date.split('.');
+        return new Date(+yy, +mm - 1, +dd) >= snapDate;
+      });
+
+      // Periyoda göre grupla ve kümülatif net değer hesapla
+      const buildPoints = (mode) => {
+        const groups = {};
+        txnsAfter.forEach(t => {
+          const [dd, mm, yy] = t.date.split('.');
+          const key = mode === 'daily' ? `${dd}.${mm}.${yy}`
+                    : mode === 'monthly' ? `${mm}.${yy}`
+                    : yy;
+          groups[key] = (groups[key] || 0) + t.amount;
+        });
+        // Sıralı anahtarlar
+        const sorted = Object.keys(groups).sort((a, b) => {
+          const parse = k => {
+            const p = k.split('.');
+            if (mode === 'daily')   return new Date(+p[2], +p[1]-1, +p[0]);
+            if (mode === 'monthly') return new Date(+p[1], +p[0]-1, 1);
+            return new Date(+p[0], 0, 1);
+          };
+          return parse(a) - parse(b);
+        });
+        // Kümülatif
+        let cum = snapshot.netWorth;
+        const pts = [{ key: 'Başlangıç', val: snapshot.netWorth }];
+        sorted.forEach(k => { cum += groups[k]; pts.push({ key: k, val: cum }); });
+        // Şimdiki değeri sona ekle (eğer farklıysa)
+        if (pts[pts.length - 1].val !== nowNet) pts.push({ key: 'Şimdi', val: nowNet });
+        return pts;
       };
+
+      const pts = buildPoints(chartPeriod);
+      const vals = pts.map(p => p.val);
+      const minV = Math.min(...vals);
+      const maxV = Math.max(...vals);
+      const range = maxV - minV || 1;
+      const W = 280, H = 90;
+      const cx = (i) => i * (W / (pts.length - 1 || 1));
+      const cy = (v) => H - ((v - minV) / range) * H;
+      const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${cx(i).toFixed(1)},${cy(p.val).toFixed(1)}`).join(' ');
+      const areaD = pathD + ` L${W},${H} L0,${H} Z`;
+      const lastColor = deltaNet >= 0 ? T.success : T.danger;
+
       return (
         <Card T={T} style={{ padding: '14px 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ fontSize: T.fs(13), fontWeight: 700, color: T.text }}>📸 Başlangıca Göre Değişim</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: T.fs(13), fontWeight: 700, color: T.text }}>📸 Net Değer Değişimi</div>
             <div style={{ fontSize: T.fs(10), color: T.textSub }}>Ref: {snapshot.date}</div>
           </div>
-          <Row label="Net Değer" delta={deltaNet} />
-          <Row label="Toplam Varlık" delta={deltaAssets} />
-          <Row label="Toplam Borç (azalma +)" delta={deltaDebt} />
-          <div style={{ marginTop: 10, padding: '8px 10px', background: deltaNet >= 0 ? T.successBg : T.dangerBg, borderRadius: 8, textAlign: 'center' }}>
-            <span style={{ fontSize: T.fs(12), fontWeight: 700, color: deltaNet >= 0 ? T.success : T.danger }}>
-              {deltaNet >= 0 ? '📈 Başlangıçtan bu yana net değer arttı' : '📉 Başlangıçtan bu yana net değer azaldı'}
+
+          {/* Özet satırı */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {[
+              ['Net Değer', deltaNet, true],
+              ['Varlık', deltaAssets, true],
+              ['Borç ↓', deltaDebt, true],
+            ].map(([lbl, delta]) => (
+              <div key={lbl} style={{ flex: 1, background: T.surface2, borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: T.fs(9), color: T.textSub, marginBottom: 2 }}>{lbl}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(11), fontWeight: 700, color: delta >= 0 ? T.success : T.danger }}>
+                  {delta >= 0 ? '+' : ''}{fmtK(delta)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Periyot seçici */}
+          <div style={{ display: 'flex', background: T.surface2, borderRadius: 8, padding: 2, gap: 2, marginBottom: 12 }}>
+            {[['daily','Günlük'],['monthly','Aylık'],['yearly','Yıllık']].map(([id, lbl]) => (
+              <button key={id} onClick={() => setChartPeriod(id)}
+                style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: T.fs(11), fontWeight: 600, background: chartPeriod === id ? T.surface : 'transparent', color: chartPeriod === id ? T.primary : T.textSub, boxShadow: chartPeriod === id ? T.cardShadow : 'none', transition: 'all .15s' }}>{lbl}</button>
+            ))}
+          </div>
+
+          {/* Grafik */}
+          {pts.length < 2 ? (
+            <div style={{ textAlign: 'center', padding: '16px 0', color: T.textSub, fontSize: T.fs(12) }}>
+              Henüz yeterli işlem yok
+            </div>
+          ) : (
+            <svg width={W} height={H + 20} style={{ display: 'block', overflow: 'visible' }}>
+              <defs>
+                <linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={lastColor} stopOpacity="0.25" />
+                  <stop offset="100%" stopColor={lastColor} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {[0.25, 0.5, 0.75].map(f => (
+                <line key={f} x1="0" y1={cy(minV + range * f)} x2={W} y2={cy(minV + range * f)}
+                  stroke={T.border} strokeWidth="1" strokeDasharray="3,4" />
+              ))}
+              <path d={areaD} fill="url(#netGrad)" />
+              <path d={pathD} fill="none" stroke={lastColor} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+              <circle cx={cx(0)} cy={cy(pts[0].val)} r="4" fill={T.textSub} />
+              <circle cx={cx(pts.length - 1)} cy={cy(pts[pts.length - 1].val)} r="4" fill={lastColor} />
+              {/* X etiketleri: ilk, orta, son */}
+              {[0, Math.floor((pts.length - 1) / 2), pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map(i => (
+                <text key={i} x={cx(i)} y={H + 16} textAnchor="middle" fontSize={T.fs(9)} fill={T.textSub} fontFamily="DM Sans">
+                  {pts[i].key}
+                </text>
+              ))}
+            </svg>
+          )}
+
+          <div style={{ marginTop: 8, padding: '7px 10px', background: deltaNet >= 0 ? T.successBg : T.dangerBg, borderRadius: 8, textAlign: 'center' }}>
+            <span style={{ fontSize: T.fs(11), fontWeight: 700, color: lastColor }}>
+              {deltaNet >= 0 ? '📈 Net değer arttı' : '📉 Net değer azaldı'} · Şimdi: {fmtK(nowNet)}
             </span>
           </div>
         </Card>
@@ -3742,7 +3835,7 @@ function App() {
     <div style={{ position: 'fixed', inset: 0, background: T.bg, display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans',sans-serif", overflow: 'hidden' }}>
       <div style={{ height: 'env(safe-area-inset-top)', background: T.surface, flexShrink: 0 }} />
       {renderHeader()}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', zIndex: 200 }}
         onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {renderScreen()}
       </div>
@@ -3781,7 +3874,7 @@ function App() {
         <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '.07em' }}>{screenTitles[screen] || 'İşlem Ekle'}</div>
         <PhoneShell T={T}>
           {renderHeader()}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', zIndex: 200 }}>
             {renderScreen()}
           </div>
           <div style={{ height: 76, background: T.surface, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', padding: '8px 0 0', flexShrink: 0, position: 'relative', zIndex: 100 }}>
