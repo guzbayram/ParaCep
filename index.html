@@ -1156,6 +1156,18 @@ function EditTransactionModal({ tx, onClose, T }) {
     if (!window.confirm('Bu işlemi silmek istiyor musunuz?')) return;
     setDeleting(true);
     await db.collection(`users/${user.uid}/transactions`).doc(tx.id).delete();
+    // Hesap bakiyesini geri al: gider ise ekle (+), gelir ise çıkar (-)
+    if (tx.accountId) {
+      await db.collection(`users/${user.uid}/accounts`).doc(tx.accountId).update({
+        balance: firebase.firestore.FieldValue.increment(-tx.amount)
+      });
+    }
+    // Kredi kartı borcunu geri al
+    if (tx.cardId && tx.amount < 0) {
+      await db.collection(`users/${user.uid}/cards`).doc(tx.cardId).update({
+        balance: firebase.firestore.FieldValue.increment(-Math.abs(tx.amount))
+      });
+    }
     setDeleting(false);
     onClose();
   };
