@@ -749,7 +749,7 @@ function DashboardScreen({ T, onNav }) {
             </>;
           })()}
           {pts.length >= 2 && (
-            <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible' }}>
+            <svg width={W} height={H + 14} style={{ display: 'block' }}>
               <defs>
                 <linearGradient id="dashNetGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={color} stopOpacity="0.2" />
@@ -761,7 +761,7 @@ function DashboardScreen({ T, onNav }) {
               <circle cx={cx(0)} cy={cy(pts[0].val)} r="3" fill={T.textMut} />
               <circle cx={cx(pts.length - 1)} cy={cy(pts[pts.length - 1].val)} r="4" fill={color} />
               {[0, pts.length - 1].map(i => (
-                <text key={i} x={i === 0 ? Math.max(cx(i) + 18, 18) : Math.min(cx(i) - 18, W - 18)} y={H + 12} textAnchor="middle" fontSize={T.fs(8)} fill={T.textSub} fontFamily="DM Sans">{pts[i].key}</text>
+                <text key={i} x={i === 0 ? 4 : W - 4} y={H + 12} textAnchor={i === 0 ? 'start' : 'end'} fontSize={T.fs(8)} fill={T.textSub} fontFamily="DM Sans">{pts[i].key}</text>
               ))}
             </svg>
           )}
@@ -1577,7 +1577,7 @@ function ReportsScreen({ T, chartStyle }) {
               Henüz yeterli işlem yok
             </div>
           ) : (
-            <svg width={W} height={H + 20} style={{ display: 'block', overflow: 'visible' }}>
+            <svg width={W} height={H + 20} style={{ display: 'block' }}>
               <defs>
                 <linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={lastColor} stopOpacity="0.25" />
@@ -1593,9 +1593,13 @@ function ReportsScreen({ T, chartStyle }) {
               <circle cx={cx(0)} cy={cy(pts[0].val)} r="4" fill={T.textSub} />
               <circle cx={cx(pts.length - 1)} cy={cy(pts[pts.length - 1].val)} r="4" fill={lastColor} />
               {/* X etiketleri: ilk, orta, son */}
-              {[0, Math.floor((pts.length - 1) / 2), pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map(i => (
-                <text key={i} x={Math.max(Math.min(cx(i), W - 16), 16)} y={H + 16} textAnchor="middle" fontSize={T.fs(9)} fill={T.textSub} fontFamily="DM Sans">
-                  {pts[i].key}
+              {[0, Math.floor((pts.length - 1) / 2), pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map((idx, pos, arr) => (
+                <text key={idx}
+                  x={pos === 0 ? 4 : pos === arr.length - 1 ? W - 4 : cx(idx)}
+                  y={H + 16}
+                  textAnchor={pos === 0 ? 'start' : pos === arr.length - 1 ? 'end' : 'middle'}
+                  fontSize={T.fs(9)} fill={T.textSub} fontFamily="DM Sans">
+                  {pts[idx].key}
                 </text>
               ))}
             </svg>
