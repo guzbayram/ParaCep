@@ -864,9 +864,19 @@ function DebtsScreen({ T }) {
   };
 
   // Kredi kartı ödemesi
+  const deductFromAccount = async (accountId, amount) => {
+    if (!accountId) return;
+    const account = (DATA.accounts || []).find(a => a.id === accountId);
+    if (!account) return;
+    await db.collection(`users/${user.uid}/accounts`).doc(accountId).update({
+      balance: (account.balance || 0) - amount
+    });
+  };
+
   const payCard = async (card, amount, sourceLoan, accountId) => {
     const newBalance = Math.max(0, (card.balance || 0) - amount);
     await db.collection(`users/${user.uid}/cards`).doc(card.id).update({ balance: newBalance });
+    await deductFromAccount(accountId, amount);
     const today = new Date().toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'.');
     if (sourceLoan) {
       const newRemaining = (sourceLoan.remaining || 0) + amount;
@@ -895,6 +905,7 @@ function DebtsScreen({ T }) {
     const rem = Math.max(0, (loan.remaining || 0) - (loan.monthly || 0));
     const paid = (loan.totalPaid || 0) + (loan.monthly || 0);
     await db.collection(`users/${user.uid}/loans`).doc(loan.id).update({ remaining_count: rc, remaining: rem, totalPaid: paid });
+    await deductFromAccount(accountId, loan.monthly || 0);
     const today = new Date().toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'.');
     await db.collection(`users/${user.uid}/transactions`).add({
       label: `${loan.name} Taksiti`, cat: 'Kredi Taksiti', catColor: '#059669',
