@@ -682,15 +682,15 @@ function DashboardScreen({ T, onNav }) {
       const deltaNet = netWorth - snapshot.netWorth;
       const deltaDebt = snapshot.totalDebt - totalDebt;
       const color = deltaNet >= 0 ? T.success : T.danger;
-      const [sd, sm, sy] = snapshot.date.split('.');
-      const snapDate = new Date(+sy, +sm - 1, +sd);
-      const txnsAfter = (DATA.transactions || []).filter(t => {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const startLabel = `${String(oneYearAgo.getMonth()+1).padStart(2,'0')}.${oneYearAgo.getFullYear()}`;
+      const txnsRange = (DATA.transactions || []).filter(t => {
         const [dd, mm, yy] = t.date.split('.');
-        return new Date(+yy, +mm - 1, +dd) >= snapDate;
+        return new Date(+yy, +mm - 1, +dd) >= oneYearAgo;
       });
-      // Aylık grupla kümülatif
       const groups = {};
-      txnsAfter.forEach(t => {
+      txnsRange.forEach(t => {
         const [dd, mm, yy] = t.date.split('.');
         const key = `${mm}.${yy}`;
         groups[key] = (groups[key] || 0) + t.amount;
@@ -699,17 +699,20 @@ function DashboardScreen({ T, onNav }) {
         const [am, ay] = a.split('.'), [bm, by] = b.split('.');
         return new Date(+ay, +am - 1) - new Date(+by, +bm - 1);
       });
-      let cum = snapshot.netWorth;
-      const pts = [{ key: 'Başlangıç', val: snapshot.netWorth }];
+      let cum = 0;
+      const pts = [{ key: startLabel, val: 0 }];
       sorted.forEach(k => { cum += groups[k]; pts.push({ key: k, val: cum }); });
-      if (pts[pts.length - 1].val !== netWorth) pts.push({ key: 'Şimdi', val: netWorth });
+      const now = new Date();
+      const nowLabel = `${String(now.getMonth()+1).padStart(2,'0')}.${now.getFullYear()}`;
+      if (pts[pts.length-1].key !== nowLabel) pts.push({ key: nowLabel, val: cum });
       const vals = pts.map(p => p.val);
-      const minV = Math.min(...vals), maxV = Math.max(...vals), range = maxV - minV || 1;
+      const minV = Math.min(0, ...vals), maxV = Math.max(0, ...vals), range = maxV - minV || 1;
       const W = 280, H = 70;
       const cx = i => i * (W / (pts.length - 1 || 1));
       const cy = v => H - ((v - minV) / range) * H;
+      const zeroY = cy(0);
       const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${cx(i).toFixed(1)},${cy(p.val).toFixed(1)}`).join(' ');
-      const areaD = pathD + ` L${W},${H} L0,${H} Z`;
+      const areaD = pathD + ` L${W},${zeroY.toFixed(1)} L0,${zeroY.toFixed(1)} Z`;
       return (
         <Card T={T} style={{ padding: '12px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -756,6 +759,7 @@ function DashboardScreen({ T, onNav }) {
                   <stop offset="100%" stopColor={color} stopOpacity="0" />
                 </linearGradient>
               </defs>
+              <line x1="0" y1={zeroY} x2={W} y2={zeroY} stroke={T.border} strokeWidth="1.5" strokeDasharray="4,3" />
               <path d={areaD} fill="url(#dashNetGrad)" />
               <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
               <circle cx={cx(0)} cy={cy(pts[0].val)} r="3" fill={T.textMut} />
@@ -1475,27 +1479,27 @@ function ReportsScreen({ T, chartStyle }) {
       const deltaAssets = nowAssets - snapshot.totalAssets;
       const deltaDebt   = snapshot.totalDebt - nowDebt;
 
-      // Snapshot tarihini parse et (DD.MM.YYYY)
-      const [sd, sm, sy] = snapshot.date.split('.');
-      const snapDate = new Date(+sy, +sm - 1, +sd);
-
-      // İşlemleri snapshot'tan sonraki ile filtrele
-      const txnsAfter = (DATA.transactions || []).filter(t => {
+      // Son 1 yılın işlemlerini filtrele
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const txnsRange = (DATA.transactions || []).filter(t => {
         const [dd, mm, yy] = t.date.split('.');
-        return new Date(+yy, +mm - 1, +dd) >= snapDate;
+        return new Date(+yy, +mm - 1, +dd) >= oneYearAgo;
       });
+      const now = new Date();
+      const nowLabel = `${String(now.getMonth()+1).padStart(2,'0')}.${now.getFullYear()}`;
+      const startLabel = `${String(oneYearAgo.getMonth()+1).padStart(2,'0')}.${oneYearAgo.getFullYear()}`;
 
-      // Periyoda göre grupla ve kümülatif net değer hesapla
+      // Periyoda göre grupla ve kümülatif hesapla (0'dan başlar)
       const buildPoints = (mode) => {
         const groups = {};
-        txnsAfter.forEach(t => {
+        txnsRange.forEach(t => {
           const [dd, mm, yy] = t.date.split('.');
           const key = mode === 'daily' ? `${dd}.${mm}.${yy}`
                     : mode === 'monthly' ? `${mm}.${yy}`
                     : yy;
           groups[key] = (groups[key] || 0) + t.amount;
         });
-        // Sıralı anahtarlar
         const sorted = Object.keys(groups).sort((a, b) => {
           const parse = k => {
             const p = k.split('.');
@@ -1505,26 +1509,26 @@ function ReportsScreen({ T, chartStyle }) {
           };
           return parse(a) - parse(b);
         });
-        // Kümülatif
-        let cum = snapshot.netWorth;
-        const pts = [{ key: 'Başlangıç', val: snapshot.netWorth }];
+        let cum = 0;
+        const pts = [{ key: startLabel, val: 0 }];
         sorted.forEach(k => { cum += groups[k]; pts.push({ key: k, val: cum }); });
-        // Şimdiki değeri sona ekle (eğer farklıysa)
-        if (pts[pts.length - 1].val !== nowNet) pts.push({ key: 'Şimdi', val: nowNet });
+        if (pts[pts.length-1].key !== nowLabel) pts.push({ key: nowLabel, val: cum });
         return pts;
       };
 
       const pts = buildPoints(chartPeriod);
       const vals = pts.map(p => p.val);
-      const minV = Math.min(...vals);
-      const maxV = Math.max(...vals);
+      const minV = Math.min(0, ...vals);
+      const maxV = Math.max(0, ...vals);
       const range = maxV - minV || 1;
       const W = 280, H = 90;
       const cx = (i) => i * (W / (pts.length - 1 || 1));
       const cy = (v) => H - ((v - minV) / range) * H;
+      const zeroY = cy(0);
       const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${cx(i).toFixed(1)},${cy(p.val).toFixed(1)}`).join(' ');
-      const areaD = pathD + ` L${W},${H} L0,${H} Z`;
-      const lastColor = deltaNet >= 0 ? T.success : T.danger;
+      const areaD = pathD + ` L${W},${zeroY.toFixed(1)} L0,${zeroY.toFixed(1)} Z`;
+      const lastVal = pts[pts.length - 1].val;
+      const lastColor = lastVal >= 0 ? T.success : T.danger;
 
       return (
         <Card T={T} style={{ padding: '14px 16px' }}>
@@ -1588,6 +1592,7 @@ function ReportsScreen({ T, chartStyle }) {
                 <line key={f} x1="0" y1={cy(minV + range * f)} x2={W} y2={cy(minV + range * f)}
                   stroke={T.border} strokeWidth="1" strokeDasharray="3,4" />
               ))}
+              <line x1="0" y1={zeroY} x2={W} y2={zeroY} stroke={lastColor} strokeWidth="1.5" strokeDasharray="4,3" strokeOpacity="0.5" />
               <path d={areaD} fill="url(#netGrad)" />
               <path d={pathD} fill="none" stroke={lastColor} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
               <circle cx={cx(0)} cy={cy(pts[0].val)} r="4" fill={T.textSub} />
@@ -1605,9 +1610,9 @@ function ReportsScreen({ T, chartStyle }) {
             </svg>
           )}
 
-          <div style={{ marginTop: 8, padding: '7px 10px', background: deltaNet >= 0 ? T.successBg : T.dangerBg, borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ marginTop: 8, padding: '7px 10px', background: lastVal >= 0 ? T.successBg : T.dangerBg, borderRadius: 8, textAlign: 'center' }}>
             <span style={{ fontSize: T.fs(11), fontWeight: 700, color: lastColor }}>
-              {deltaNet >= 0 ? '📈 Net değer arttı' : '📉 Net değer azaldı'} · Şimdi: {fmtK(nowNet)}
+              {lastVal >= 0 ? '📈 Son 1 yılda birikim' : '📉 Son 1 yılda net gider'} · {lastVal >= 0 ? '+' : ''}{fmtK(lastVal)}
             </span>
           </div>
         </Card>
