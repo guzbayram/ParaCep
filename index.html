@@ -866,10 +866,8 @@ function DebtsScreen({ T }) {
   // Kredi kartı ödemesi
   const deductFromAccount = async (accountId, amount) => {
     if (!accountId) return;
-    const account = (DATA.accounts || []).find(a => a.id === accountId);
-    if (!account) return;
     await db.collection(`users/${user.uid}/accounts`).doc(accountId).update({
-      balance: (account.balance || 0) - amount
+      balance: firebase.firestore.FieldValue.increment(-amount)
     });
   };
 
@@ -3827,19 +3825,15 @@ function App() {
     await db.collection(`users/${user.uid}/transactions`).add({ ...tx, accountId: accountId || null, cardId: cardId || null, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     // Banka hesabı bakiyesini güncelle
     if (accountId) {
-      const account = DATA.accounts.find(a => a.id === accountId);
-      if (account) {
-        const newBal = (account.balance || 0) + txData.amount;
-        await db.collection(`users/${user.uid}/accounts`).doc(accountId).update({ balance: newBal });
-      }
+      await db.collection(`users/${user.uid}/accounts`).doc(accountId).update({
+        balance: firebase.firestore.FieldValue.increment(txData.amount)
+      });
     }
     // Kredi kartı borcunu artır (gider)
     if (cardId && txData.amount < 0) {
-      const card = DATA.cards.find(c => c.id === cardId);
-      if (card) {
-        const newBalance = (card.balance || 0) + Math.abs(txData.amount);
-        await db.collection(`users/${user.uid}/cards`).doc(cardId).update({ balance: newBalance });
-      }
+      await db.collection(`users/${user.uid}/cards`).doc(cardId).update({
+        balance: firebase.firestore.FieldValue.increment(Math.abs(txData.amount))
+      });
     }
     // Bütçeyi güncelle
     if (linkedBudgetId) {
