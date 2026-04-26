@@ -626,6 +626,7 @@ function DashboardScreen({ T, onNav }) {
     firebase.firestore().doc(`users/${user.uid}/meta/snapshot`).get()
       .then(doc => { if (doc.exists) setSnapshot(doc.data()); });
   }, []);
+  const [snapTip, setSnapTip] = React.useState(null);
   const [heroTip, setHeroTip] = React.useState(null);
   const heroTips = {
     networth: `Net Değer = Toplam Varlık − Toplam Borç\n\nVarlık: ${fmtK(totalAssets)}\nBorç: ${fmtK(totalDebt)}\nNet: ${fmtK(netWorth)}`,
@@ -715,20 +716,38 @@ function DashboardScreen({ T, onNav }) {
             <div style={{ fontSize: T.fs(12), fontWeight: 700, color: T.text }}>📸 Net Değer Değişimi</div>
             <div style={{ fontSize: T.fs(9), color: T.textSub }}>Ref: {snapshot.date}</div>
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <div style={{ flex: 1, background: T.surface2, borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
-              <div style={{ fontSize: T.fs(9), color: T.textSub }}>Net Değer</div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, color }}>{deltaNet >= 0 ? '+' : ''}{fmtK(deltaNet)}</div>
-            </div>
-            <div style={{ flex: 1, background: T.surface2, borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
-              <div style={{ fontSize: T.fs(9), color: T.textSub }}>Borç ↓</div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, color: deltaDebt >= 0 ? T.success : T.danger }}>{deltaDebt >= 0 ? '+' : ''}{fmtK(deltaDebt)}</div>
-            </div>
-            <div style={{ flex: 1, background: color + '18', borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
-              <div style={{ fontSize: T.fs(9), color: T.textSub }}>Şimdi</div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, color }}>{fmtK(netWorth)}</div>
-            </div>
-          </div>
+          {(() => {
+            const IBtn = ({ id }) => (
+              <span onClick={e => { e.stopPropagation(); setSnapTip(snapTip === id ? null : id); }}
+                style={{ cursor: 'pointer', fontSize: T.fs(9), color: T.textMut, marginLeft: 2, lineHeight: 1, userSelect: 'none' }}>ⓘ</span>
+            );
+            const tipMap = {
+              net:  `Snapshot'tan bu yana net değer değişimi.\nBaşlangıç: ${fmtK(snapshot.netWorth)}`,
+              debt: `Borçtaki değişim.\nPozitif = borç azaldı.\nBaşlangıç: ${fmtK(snapshot.totalDebt || 0)}`,
+              now:  `Güncel net değer\nVarlık: ${fmtK(totalAssets)}\nBorç: ${fmtK(totalDebt)}`,
+            };
+            return <>
+              <div style={{ display: 'flex', gap: 8, marginBottom: snapTip ? 4 : 10 }}>
+                <div style={{ flex: 1, background: T.surface2, borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: T.fs(9), color: T.textSub, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Net Değer<IBtn id="net"/></div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, color }}>{deltaNet >= 0 ? '+' : ''}{fmtK(deltaNet)}</div>
+                </div>
+                <div style={{ flex: 1, background: T.surface2, borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: T.fs(9), color: T.textSub, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Borç ↓<IBtn id="debt"/></div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, color: deltaDebt >= 0 ? T.success : T.danger }}>{deltaDebt >= 0 ? '+' : ''}{fmtK(deltaDebt)}</div>
+                </div>
+                <div style={{ flex: 1, background: color + '18', borderRadius: 8, padding: '5px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: T.fs(9), color: T.textSub, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Şimdi<IBtn id="now"/></div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(12), fontWeight: 700, color }}>{fmtK(netWorth)}</div>
+                </div>
+              </div>
+              {snapTip && tipMap[snapTip] && (
+                <div onClick={() => setSnapTip(null)} style={{ marginBottom: 8, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(6px)', borderRadius: 8, padding: '7px 10px', fontSize: T.fs(10), color: '#fff', whiteSpace: 'pre-line', lineHeight: 1.5, cursor: 'pointer' }}>
+                  {tipMap[snapTip]}
+                </div>
+              )}
+            </>;
+          })()}
           {pts.length >= 2 && (
             <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible' }}>
               <defs>
@@ -742,7 +761,7 @@ function DashboardScreen({ T, onNav }) {
               <circle cx={cx(0)} cy={cy(pts[0].val)} r="3" fill={T.textMut} />
               <circle cx={cx(pts.length - 1)} cy={cy(pts[pts.length - 1].val)} r="4" fill={color} />
               {[0, pts.length - 1].map(i => (
-                <text key={i} x={cx(i)} y={H + 12} textAnchor={i === 0 ? 'start' : 'end'} fontSize={T.fs(8)} fill={T.textSub} fontFamily="DM Sans">{pts[i].key}</text>
+                <text key={i} x={i === 0 ? Math.max(cx(i) + 18, 18) : Math.min(cx(i) - 18, W - 18)} y={H + 12} textAnchor="middle" fontSize={T.fs(8)} fill={T.textSub} fontFamily="DM Sans">{pts[i].key}</text>
               ))}
             </svg>
           )}
@@ -1426,6 +1445,7 @@ function ReportsScreen({ T, chartStyle }) {
   const [openTip, setOpenTip] = React.useState(null);
   const [snapshot, setSnapshot] = React.useState(null);
   const [chartPeriod, setChartPeriod] = React.useState('monthly'); // 'daily'|'monthly'|'yearly'
+  const [snapTip, setSnapTip] = React.useState(null);
   React.useEffect(() => {
     const user = firebase.auth().currentUser;
     if (!user) return;
@@ -1514,20 +1534,34 @@ function ReportsScreen({ T, chartStyle }) {
           </div>
 
           {/* Özet satırı */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            {[
-              ['Net Değer', deltaNet, true],
-              ['Varlık', deltaAssets, true],
-              ['Borç ↓', deltaDebt, true],
-            ].map(([lbl, delta]) => (
-              <div key={lbl} style={{ flex: 1, background: T.surface2, borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: T.fs(9), color: T.textSub, marginBottom: 2 }}>{lbl}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(11), fontWeight: 700, color: delta >= 0 ? T.success : T.danger }}>
-                  {delta >= 0 ? '+' : ''}{fmtK(delta)}
-                </div>
+          {(() => {
+            const tipMap = {
+              'Net Değer': `Snapshot'tan bu yana net değer değişimi.\nBaşlangıç: ${fmtK(snapshot.netWorth)}`,
+              'Varlık':    `Snapshot'tan bu yana varlık değişimi.\nBaşlangıç: ${fmtK(snapshot.totalAssets || 0)}`,
+              'Borç ↓':   `Borçtaki değişim. Pozitif = borç azaldı.\nBaşlangıç: ${fmtK(snapshot.totalDebt || 0)}`,
+            };
+            const IBtn = ({ id }) => (
+              <span onClick={e => { e.stopPropagation(); setSnapTip(snapTip === id ? null : id); }}
+                style={{ cursor: 'pointer', fontSize: T.fs(9), color: T.textMut, marginLeft: 2, lineHeight: 1, userSelect: 'none' }}>ⓘ</span>
+            );
+            return <>
+              <div style={{ display: 'flex', gap: 8, marginBottom: snapTip ? 4 : 12 }}>
+                {[['Net Değer', deltaNet], ['Varlık', deltaAssets], ['Borç ↓', deltaDebt]].map(([lbl, delta]) => (
+                  <div key={lbl} style={{ flex: 1, background: T.surface2, borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: T.fs(9), color: T.textSub, marginBottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{lbl}<IBtn id={lbl}/></div>
+                    <div style={{ fontFamily: "'DM Mono',monospace", fontSize: T.fs(11), fontWeight: 700, color: delta >= 0 ? T.success : T.danger }}>
+                      {delta >= 0 ? '+' : ''}{fmtK(delta)}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              {snapTip && tipMap[snapTip] && (
+                <div onClick={() => setSnapTip(null)} style={{ marginBottom: 8, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(6px)', borderRadius: 8, padding: '7px 10px', fontSize: T.fs(10), color: '#fff', whiteSpace: 'pre-line', lineHeight: 1.5, cursor: 'pointer' }}>
+                  {tipMap[snapTip]}
+                </div>
+              )}
+            </>;
+          })()}
 
           {/* Periyot seçici */}
           <div style={{ display: 'flex', background: T.surface2, borderRadius: 8, padding: 2, gap: 2, marginBottom: 12 }}>
@@ -1560,7 +1594,7 @@ function ReportsScreen({ T, chartStyle }) {
               <circle cx={cx(pts.length - 1)} cy={cy(pts[pts.length - 1].val)} r="4" fill={lastColor} />
               {/* X etiketleri: ilk, orta, son */}
               {[0, Math.floor((pts.length - 1) / 2), pts.length - 1].filter((v, i, a) => a.indexOf(v) === i).map(i => (
-                <text key={i} x={cx(i)} y={H + 16} textAnchor="middle" fontSize={T.fs(9)} fill={T.textSub} fontFamily="DM Sans">
+                <text key={i} x={Math.max(Math.min(cx(i), W - 16), 16)} y={H + 16} textAnchor="middle" fontSize={T.fs(9)} fill={T.textSub} fontFamily="DM Sans">
                   {pts[i].key}
                 </text>
               ))}
